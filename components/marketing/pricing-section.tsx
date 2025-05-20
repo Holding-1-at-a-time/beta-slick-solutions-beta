@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Check, HelpCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import PricingComparisonTable from "./pricing-comparison-table"
 
 interface PricingPlanProps {
   name: string
@@ -222,6 +223,9 @@ export default function PricingSection() {
           </div>
         </motion.div>
       </div>
+
+      {/* Feature Comparison Table */}
+      <PricingComparisonTable />
     </section>
   )
 }
