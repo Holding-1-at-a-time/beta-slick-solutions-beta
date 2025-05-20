@@ -1,9 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import TextBlock from "@/components/marketing/text-block"
 import { motion } from "framer-motion"
+import { ChevronRight, Star } from "lucide-react"
 
 export default function HeroSection() {
   return (
@@ -32,6 +34,21 @@ export default function HeroSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
+            {/* Trust badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-gray-900/50 px-4 py-1.5 text-sm backdrop-blur-sm"
+            >
+              <div className="flex items-center">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star key={i} className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
+                ))}
+              </div>
+              <span className="text-gray-300">Trusted by 2,500+ automotive businesses</span>
+            </motion.div>
+
             <TextBlock
               subtitle="Next-Gen Vehicle Service Platform"
               title="Revolutionize Your Automotive Business"
@@ -45,9 +62,12 @@ export default function HeroSection() {
                 <Button
                   asChild
                   size="lg"
-                  className="font-medium bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                  className="font-medium bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 group"
                 >
-                  <Link href="/sign-up">Get Started</Link>
+                  <Link href="/sign-up" className="flex items-center gap-2">
+                    Get Started
+                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
                 </Button>
               </motion.div>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -72,12 +92,16 @@ export default function HeroSection() {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className="inline-block h-10 w-10 rounded-full border-2 border-gray-900 bg-gray-800"
-                    style={{
-                      backgroundImage: `url(/placeholder.svg?height=40&width=40&query=person ${i})`,
-                      backgroundSize: "cover",
-                    }}
-                  ></div>
+                    className="inline-block h-10 w-10 rounded-full border-2 border-gray-900 bg-gray-800 overflow-hidden"
+                  >
+                    <Image
+                      src={`/diverse-group.png?height=40&width=40&query=person ${i}`}
+                      alt={`Customer ${i}`}
+                      width={40}
+                      height={40}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
                 ))}
               </div>
               <p className="text-sm text-gray-400">
@@ -93,14 +117,14 @@ export default function HeroSection() {
             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
           >
             <div className="relative rounded-xl bg-gray-900/50 p-2 shadow-2xl backdrop-blur-sm border border-gray-800 transform perspective-1000">
-              <div
-                className="aspect-[4/3] w-full rounded-lg bg-gray-800 overflow-hidden"
-                style={{
-                  backgroundImage:
-                    "url(/placeholder.svg?height=600&width=800&query=futuristic car service dashboard dark mode)",
-                  backgroundSize: "cover",
-                }}
-              >
+              <div className="aspect-[4/3] w-full rounded-lg bg-gray-800 overflow-hidden">
+                <Image
+                  src="/futuristic-car-service-dashboard-dark-mode.png"
+                  alt="Vehicle Service Dashboard"
+                  width={800}
+                  height={600}
+                  className="h-full w-full object-cover"
+                />
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent opacity-60"></div>
               </div>

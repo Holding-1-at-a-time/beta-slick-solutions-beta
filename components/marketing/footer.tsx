@@ -7,17 +7,19 @@ export default function Footer() {
     {
       title: "Product",
       links: [
-        { label: "Features", href: "#features" },
-        { label: "Pricing", href: "#pricing" },
-        { label: "Testimonials", href: "#testimonials" },
-        { label: "FAQ", href: "#faq" },
+        { label: "Features", href: "/#features" },
+        { label: "Pricing", href: "/#pricing" },
+        { label: "Testimonials", href: "/#testimonials" },
+        { label: "FAQ", href: "/faq" },
       ],
     },
     {
       title: "Company",
       links: [
-        { label: "About Us", href: "#about" },
-        { label: "Contact", href: "#contact" },
+        { label: "About Us", href: "/about" },
+        { label: "Contact", href: "/contact" },
+        { label: "Status", href: "/status" },
+        { label: "Support", href: "/support" },
       ],
     },
     {
@@ -30,10 +32,11 @@ export default function Footer() {
       ],
     },
     {
-      title: "Support",
+      title: "Resources",
       links: [
-        { label: "Status", href: "/status" },
-        { label: "Support", href: "/support" },
+        { label: "Blog", href: "/blog" },
+        { label: "Documentation", href: "/docs" },
+        { label: "Waitlist", href: "/waitlist" },
       ],
     },
   ]
@@ -68,7 +71,13 @@ export default function Footer() {
               customers.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-500 hover:text-primary transition-colors" aria-label="Twitter">
+              <a
+                href="https://twitter.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-primary transition-colors"
+                aria-label="Twitter"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -82,7 +91,13 @@ export default function Footer() {
                   <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
                 </svg>
               </a>
-              <a href="#" className="text-gray-500 hover:text-primary transition-colors" aria-label="Facebook">
+              <a
+                href="https://facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-primary transition-colors"
+                aria-label="Facebook"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -96,7 +111,13 @@ export default function Footer() {
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                 </svg>
               </a>
-              <a href="#" className="text-gray-500 hover:text-primary transition-colors" aria-label="LinkedIn">
+              <a
+                href="https://linkedin.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-primary transition-colors"
+                aria-label="LinkedIn"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -131,8 +152,21 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="mt-12 border-t border-gray-800 pt-8 text-center">
-          <p className="text-sm text-gray-500">&copy; {currentYear} VehicleService. All rights reserved.</p>
+        <div className="mt-12 border-t border-gray-800 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-sm text-gray-500">&copy; {currentYear} VehicleService. All rights reserved.</p>
+            <div className="flex space-x-6 mt-4 md:mt-0">
+              <Link href="/privacy" className="text-sm text-gray-500 hover:text-gray-400">
+                Privacy
+              </Link>
+              <Link href="/terms" className="text-sm text-gray-500 hover:text-gray-400">
+                Terms
+              </Link>
+              <Link href="/cookies" className="text-sm text-gray-500 hover:text-gray-400">
+                Cookies
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

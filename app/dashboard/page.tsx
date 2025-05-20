@@ -1,74 +1,65 @@
-"use client"
-
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react"
-import { SignInButton, UserButton } from "@clerk/nextjs"
-import { useQuery } from "convex/react"
+import { currentUser } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
+import { fetchQuery } from "convex/nextjs"
 import { api } from "@/convex/_generated/api"
-import Header from "@/components/header"
 
-export default function DashboardPage() {
-  return (
-    <div>
-      <Header />
-      <main className="container mx-auto px-4 py-8">
-        <AuthLoading>
-          <div className="flex min-h-[50vh] items-center justify-center">
-            <div className="flex flex-col items-center">
-              <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-              <p className="mt-4 text-lg font-medium">Loading authentication...</p>
-            </div>
-          </div>
-        </AuthLoading>
+import { DashboardStats } from "@/components/dashboard/dashboard-stats"
+import { RecentActivity } from "@/components/dashboard/recent-activity"
+import { UpcomingAppointments } from "@/components/dashboard/upcoming-appointments"
+import { UserWelcome } from "@/components/dashboard/user-welcome"
 
-        <Authenticated>
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <UserButton />
-          </div>
-          <DashboardContent />
-        </Authenticated>
+export default async function DashboardPage() {
+  const user = await currentUser()
 
-        <Unauthenticated>
-          <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-            <h1 className="text-3xl font-bold mb-6">Welcome to Vehicle Service Platform</h1>
-            <p className="text-lg mb-8">Please sign in to access your dashboard</p>
-            <SignInButton mode="modal">
-              <button className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary/90">Sign In</button>
-            </SignInButton>
-          </div>
-        </Unauthenticated>
-      </main>
-    </div>
-  )
-}
-
-function DashboardContent() {
-  const overview = useQuery(api.queries.getClientOverview)
-
-  if (overview === undefined) {
-    return (
-      <div className="flex justify-center py-8">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      </div>
-    )
+  if (!user) {
+    redirect("/sign-in")
   }
 
+  // Fetch user-specific dashboard data
+  const dashboardData = await fetchQuery(api.queries.getDashboardData, {
+    userId: user.id,
+  })
+
+  // Fetch user's organization data if they belong to any
+  const organizations =
+    user.organizationMemberships?.map((membership) => ({
+      id: membership.organization.id,
+      name: membership.organization.name,
+      role: membership.role,
+    })) || []
+
   return (
-    <div className="grid gap-6 md:grid-cols-3">
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold mb-2">Vehicles</h2>
-        <p className="text-3xl font-bold">{overview.vehicleCount}</p>
+    <div className="container mx-auto px-4 py-8">
+      <UserWelcome firstName={user.firstName || ""} lastName={user.lastName || ""} imageUrl={user.imageUrl} />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+        <DashboardStats
+          vehicleCount={dashboardData?.vehicleCount || 0}
+          appointmentCount={dashboardData?.appointmentCount || 0}
+          invoiceCount={dashboardData?.invoiceCount || 0}
+        />
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold mb-2">Appointments</h2>
-        <p className="text-3xl font-bold">{overview.appointmentCount}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        <UpcomingAppointments appointments={dashboardData?.upcomingAppointments || []} />
+        <RecentActivity activities={dashboardData?.recentActivities || []} />
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold mb-2">Invoices</h2>
-        <p className="text-3xl font-bold">{overview.invoiceCount}</p>
-      </div>
+      {organizations.length > 0 && (
+        <div className="mt-8 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">Your Organizations</h2>
+          <ul className="divide-y divide-gray-200">
+            {organizations.map((org) => (
+              <li key={org.id} className="py-3 flex justify-between items-center">
+                <span>{org.name}</span>
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                  {org.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

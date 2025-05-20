@@ -25,8 +25,9 @@ export default function Header() {
   const navItems = [
     { label: "Features", href: "#features" },
     { label: "Pricing", href: "#pricing" },
-    { label: "About", href: "#about" },
-    { label: "Contact", href: "#contact" },
+    { label: "Testimonials", href: "#testimonials" },
+    { label: "FAQ", href: "/faq" },
+    { label: "Contact", href: "/contact" },
   ]
 
   return (
@@ -36,7 +37,7 @@ export default function Header() {
       transition={{ type: "spring", stiffness: 100, damping: 20 }}
       className={`sticky top-0 z-50 w-full border-b transition-all duration-300 ${
         scrolled
-          ? "border-gray-800 bg-black/80 backdrop-blur-xl"
+          ? "border-gray-800 bg-black/90 backdrop-blur-xl"
           : "border-transparent bg-transparent backdrop-blur-none"
       }`}
     >
@@ -93,7 +94,7 @@ export default function Header() {
               <Button variant="ghost" asChild className="hidden sm:inline-flex text-gray-300 hover:text-white">
                 <Link href="/sign-in">Sign In</Link>
               </Button>
-              <Button asChild className="bg-primary hover:bg-primary/90">
+              <Button asChild className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
                 <Link href="/sign-up">Get Started</Link>
               </Button>
             </>
@@ -155,7 +156,7 @@ export default function Header() {
                           Sign In
                         </Link>
                       </Button>
-                      <Button asChild className="w-full bg-primary hover:bg-primary/90">
+                      <Button asChild className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
                         <Link href="/sign-up" onClick={() => setIsMenuOpen(false)}>
                           Get Started
                         </Link>
@@ -163,7 +164,7 @@ export default function Header() {
                     </>
                   )}
                   {isSignedIn && (
-                    <Button asChild className="w-full bg-primary hover:bg-primary/90">
+                    <Button asChild className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
                       <Link href="/dashboard" onClick={() => setIsMenuOpen(false)}>
                         Dashboard
                       </Link>

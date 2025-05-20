@@ -1,11 +1,12 @@
 "use client"
 
 import { useRef } from "react"
+import Link from "next/link"
 import { motion, useInView } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Check } from "lucide-react"
-import Link from "next/link"
+import { Check, HelpCircle } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface PricingPlanProps {
   name: string
@@ -162,19 +163,63 @@ export default function PricingSection() {
           ))}
         </div>
 
+        {/* Pricing FAQ */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-12 text-center"
+          className="mt-20 max-w-3xl mx-auto"
         >
-          <p className="text-gray-400">
-            Need a custom solution?{" "}
-            <a href="#contact" className="font-medium text-primary hover:underline">
-              Contact us
-            </a>{" "}
-            for a tailored quote.
-          </p>
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-bold text-white mb-2">Frequently Asked Questions</h3>
+            <p className="text-gray-400">Everything you need to know about our pricing and plans</p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+              <h4 className="text-lg font-medium text-white mb-2 flex items-center">
+                Can I upgrade or downgrade my plan?
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 ml-2 text-gray-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="w-80">You can change your plan at any time from your account settings.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </h4>
+              <p className="text-gray-400">
+                Yes, you can upgrade or downgrade your plan at any time. Changes take effect at the start of your next
+                billing cycle.
+              </p>
+            </div>
+
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+              <h4 className="text-lg font-medium text-white mb-2">Do you offer annual billing?</h4>
+              <p className="text-gray-400">
+                Yes, we offer annual billing with a 15% discount compared to monthly billing.
+              </p>
+            </div>
+
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+              <h4 className="text-lg font-medium text-white mb-2">What payment methods do you accept?</h4>
+              <p className="text-gray-400">
+                We accept all major credit cards, PayPal, and bank transfers for Enterprise plans.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <p className="text-gray-400">
+              Need a custom solution?{" "}
+              <Link href="/contact" className="font-medium text-primary hover:underline">
+                Contact us
+              </Link>{" "}
+              for a tailored quote.
+            </p>
+          </div>
         </motion.div>
       </div>
     </section>

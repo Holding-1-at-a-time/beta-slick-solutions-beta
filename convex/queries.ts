@@ -1,6 +1,7 @@
 import { query } from "./_generated/server"
 import { getAuthenticatedUser, hasPermission } from "./lib/auth"
 import { ConvexError } from "convex/values"
+import { v } from "convex/values"
 
 // Get user profile
 export const getUserProfile = query({
@@ -130,6 +131,75 @@ export const getAdminOverview = query({
       memberCount,
       clientCount,
       totalUsers: userTenants.length,
+    }
+  },
+})
+
+// Add this query to your existing queries
+export const getDashboardData = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    // Get user's vehicles
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .collect()
+
+    // Get user's appointments
+    const appointments = await ctx.db
+      .query("appointments")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .order("desc")
+      .collect()
+
+    // Get user's invoices
+    const invoices = await ctx.db
+      .query("invoices")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .order("desc")
+      .collect()
+
+    // Get recent activities
+    const activities = await ctx.db
+      .query("activities")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .order("desc")
+      .take(5)
+
+    // Format upcoming appointments
+    const upcomingAppointments = appointments
+      .filter((appointment) => new Date(appointment.date) > new Date())
+      .slice(0, 3)
+      .map((appointment) => ({
+        id: appointment._id,
+        vehicleName:
+          vehicles.find((v) => v._id === appointment.vehicleId)?.make +
+            " " +
+            vehicles.find((v) => v._id === appointment.vehicleId)?.model || "Unknown Vehicle",
+        serviceName: appointment.serviceType,
+        date: new Date(appointment.date).toLocaleDateString(),
+        time: appointment.time,
+      }))
+
+    // Format recent activities
+    const recentActivities = activities.map((activity) => ({
+      id: activity._id,
+      type: activity.type,
+      description: activity.description,
+      timestamp: activity.timestamp,
+    }))
+
+    return {
+      vehicleCount: vehicles.length,
+      appointmentCount: appointments.length,
+      invoiceCount: invoices.length,
+      upcomingAppointments,
+      recentActivities,
     }
   },
 })

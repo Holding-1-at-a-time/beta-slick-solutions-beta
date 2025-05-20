@@ -3,9 +3,10 @@
 import type React from "react"
 
 import { useRef } from "react"
+import Image from "next/image"
 import { motion, useInView } from "framer-motion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Calendar, FileText, Shield, Zap, BarChart } from "lucide-react"
+import { Car, Calendar, FileText, Shield, Zap, BarChart, Check } from "lucide-react"
 
 interface FeatureCardProps {
   title: string
@@ -129,6 +130,43 @@ export default function FeatureSection() {
             />
           ))}
         </div>
+
+        {/* Feature highlight */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          className="mt-24 bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl overflow-hidden shadow-2xl"
+        >
+          <div className="grid md:grid-cols-2 items-center">
+            <div className="p-8 md:p-12">
+              <h3 className="text-2xl md:text-3xl font-bold text-white mb-6">AI-Driven Vehicle Assessment</h3>
+              <p className="text-gray-400 mb-8">
+                Our advanced AI technology analyzes vehicle images to identify issues, estimate repair costs, and
+                recommend service options with remarkable accuracy.
+              </p>
+
+              <ul className="space-y-3">
+                {[
+                  "Automated damage detection and classification",
+                  "Instant cost estimates based on detected issues",
+                  "Prioritized repair recommendations",
+                  "Historical comparison with previous assessments",
+                  "Integration with parts inventory and pricing",
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-300">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="relative h-full min-h-[300px] md:min-h-[400px] bg-gray-800">
+              <Image src="/ai-car-damage-analysis.png" alt="AI Vehicle Assessment" fill className="object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black to-transparent"></div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   )
