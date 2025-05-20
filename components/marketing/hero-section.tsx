@@ -95,7 +95,7 @@ export default function HeroSection() {
                     className="inline-block h-10 w-10 rounded-full border-2 border-gray-900 bg-gray-800 overflow-hidden"
                   >
                     <Image
-                      src={`/diverse-group.png?height=40&width=40&query=person ${i}`}
+                      src={`public/diverse-group.png?height=40&width=40&query=person ${i}`}
                       alt={`Customer ${i}`}
                       width={40}
                       height={40}
@@ -119,7 +119,7 @@ export default function HeroSection() {
             <div className="relative rounded-xl bg-gray-900/50 p-2 shadow-2xl backdrop-blur-sm border border-gray-800 transform perspective-1000">
               <div className="aspect-[4/3] w-full rounded-lg bg-gray-800 overflow-hidden">
                 <Image
-                  src="/futuristic-car-service-dashboard-dark-mode.png"
+                  src="public/futuristic-car-service-dashboard-dark-mode.png"
                   alt="Vehicle Service Dashboard"
                   width={800}
                   height={600}
