@@ -1,35 +1,91 @@
-import { authMiddleware, clerkClient, redirectToSignIn } from "@clerk/nextjs"
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
-export default authMiddleware({
-  publicRoutes: ["/", "/sign-in(.*)", "/sign-up(.*)", "/api/webhooks(.*)"],
-  async afterAuth(auth, req) {
-    // Handle users who aren't authenticated
-    if (!auth.userId && !auth.isPublicRoute) {
-      return redirectToSignIn({ returnBackUrl: req.url })
+// Define public routes that don't require authentication
+const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/api/webhooks(.*)"])
+
+// Define organization routes that require organization context
+const isOrgRoute = createRouteMatcher(["/org/:id(.*)", "/org-selection(.*)"])
+
+// Define admin routes that require admin permissions
+const isAdminRoute = createRouteMatcher(["/admin(.*)"])
+
+export default clerkMiddleware(
+  async (auth, req) => {
+    // For debugging in development
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Clerk Middleware] Path: ${req.nextUrl.pathname}`)
     }
 
-    // Handle org-scoped routes
-    if (auth.userId && req.nextUrl.pathname.startsWith("/org") && !auth.orgId) {
-      const orgSelection = new URL("/org-selection", req.url)
-      return NextResponse.redirect(orgSelection)
+    // Handle public routes - allow access without authentication
+    if (isPublicRoute(req)) {
+      return NextResponse.next()
     }
 
-    // If the user is logged in and trying to access a protected route
-    if (auth.userId && !auth.isPublicRoute) {
-      // Fetch user to check their role
-      const user = await clerkClient.users.getUser(auth.userId)
+    // Protect all non-public routes - user must be authenticated
+    if (!auth.userId) {
+      const signInUrl = new URL("/sign-in", req.url)
+      signInUrl.searchParams.set("redirect_url", req.url)
+      return NextResponse.redirect(signInUrl)
+    }
 
-      // Example: Restrict admin routes to users with admin role
-      if (req.nextUrl.pathname.startsWith("/admin") && !user.publicMetadata.role?.includes("admin")) {
+    // Handle organization routes - ensure organization context
+    if (isOrgRoute(req)) {
+      // Extract organization ID from the URL if present
+      const orgIdMatch = req.nextUrl.pathname.match(/\/org\/([^/]+)/)
+      const requestedOrgId = orgIdMatch ? orgIdMatch[1] : null
+
+      // If a specific org is requested in the URL but doesn't match the active org
+      if (requestedOrgId && requestedOrgId !== auth.orgId) {
+        try {
+          // Check if user has access to the requested organization
+          const hasAccess = auth.has({
+            permission: "org:member",
+            orgId: requestedOrgId,
+          })
+
+          if (!hasAccess) {
+            // User doesn't have access to the requested organization
+            return NextResponse.redirect(new URL("/org-selection", req.url))
+          }
+        } catch (error) {
+          console.error("Error checking organization access:", error)
+          return NextResponse.redirect(new URL("/org-selection", req.url))
+        }
+      }
+
+      // If no organization is active at all, redirect to org selection
+      if (!auth.orgId) {
+        return NextResponse.redirect(new URL("/org-selection", req.url))
+      }
+    }
+
+    // Handle admin routes - ensure admin permissions
+    if (isAdminRoute(req)) {
+      try {
+        // Check if user has admin permissions
+        const isAdmin = auth.has({ permission: "org:admin" })
+
+        if (!isAdmin) {
+          // User doesn't have admin permissions
+          return NextResponse.redirect(new URL("/", req.url))
+        }
+      } catch (error) {
+        console.error("Error checking admin permissions:", error)
         return NextResponse.redirect(new URL("/", req.url))
       }
     }
 
     return NextResponse.next()
   },
-})
+  { debug: process.env.NODE_ENV === "development" },
+)
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: [
+    // Skip Next.js internals and all static files
+    "/((?!_next|[^?]*\\.(html?|css|js|json|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
+  ],
 }
