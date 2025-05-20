@@ -4,6 +4,8 @@ import { Inter } from "next/font/google"
 import { ClerkProvider } from "@clerk/nextjs"
 import ConvexClientProvider from "@/components/ConvexClientProvider"
 import "./globals.css"
+import { Analytics } from "@vercel/analytics/next"
+import { Suspense } from "react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -69,8 +71,11 @@ export default function RootLayout({
     <html lang="en" className="scroll-smooth">
       <body className={inter.className}>
         <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}>
-          <ConvexClientProvider>{children}</ConvexClientProvider>
+          <Suspense>
+            <ConvexClientProvider>{children}</ConvexClientProvider>
+          </Suspense>
         </ClerkProvider>
+        <Analytics />
       </body>
     </html>
   )

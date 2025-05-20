@@ -1,0 +1,53 @@
+{
+  "extends": ["next/core-web-vitals", "eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "plugins": ["@typescript-eslint", "import"],
+  "parser": "@typescript-eslint/parser",
+  "rules": {
+    "import/no-default-export": "warn",
+    "import/prefer-default-export": "off",
+    "import/no-anonymous-default-export": "error",
+    "@typescript-eslint/explicit-function-return-type": [
+      "warn",
+      {
+        "allowExpressions": true,
+        "allowTypedFunctionExpressions": true,
+        "allowHigherOrderFunctions": true,
+        "allowDirectConstAssertionInArrowFunctions": true
+      }
+    ],
+    "@typescript-eslint/no-explicit-any": "error",
+    "import/order": [
+      "warn",
+      {
+        "groups": ["builtin", "external", "internal", ["parent", "sibling"], "index", "object", "type"],
+        "newlines-between": "always",
+        "alphabetize": { "order": "asc", "caseInsensitive": true }
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "app/**/page.tsx",
+        "app/**/layout.tsx",
+        "app/**/loading.tsx",
+        "app/**/error.tsx",
+        "pages/**/*.tsx",
+        "middleware.ts",
+        "next.config.js",
+        "tailwind.config.js",
+        "postcss.config.js"
+      ],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    },
+    {
+      "files": ["components/**/*.tsx"],
+      "rules": {
+        "import/no-default-export": "off",
+        "import/no-anonymous-default-export": "error"
+      }
+    }
+  ]
+}
