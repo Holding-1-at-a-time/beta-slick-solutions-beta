@@ -30,32 +30,16 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Handle organization routes - ensure organization context
   if (isOrgRoute(req)) {
-    // Extract organization ID from the URL if present
-    const orgIdMatch = req.nextUrl.pathname.match(/\/org\/([^/]+)/)
-    const requestedOrgId = orgIdMatch ? orgIdMatch[1] : null
-
-    // If a specific org is requested in the URL but doesn't match the active org
-    if (requestedOrgId && requestedOrgId !== auth.orgId) {
-      // Check if user has access to the requested organization
-      // Note: We're not using auth.has() here as it might be causing the issue
-      // Instead, we'll just check if the user is authenticated
-      return NextResponse.next()
-    }
-
     // If no organization is active at all, redirect to org selection
     if (!auth.orgId) {
       return NextResponse.redirect(new URL("/org-selection", req.url))
     }
   }
 
-  // Handle admin routes - ensure admin permissions
+  // Handle admin routes - ensure admin role
   if (isAdminRoute(req)) {
-    // Simple role check using session claims
-    // This avoids potential issues with auth.has()
-    const isAdmin = auth.sessionClaims?.metadata?.role === "admin"
-
-    if (!isAdmin) {
-      // User doesn't have admin permissions
+    // Check if user has admin role
+    if (auth.orgRole !== "org:admin") {
       return NextResponse.redirect(new URL("/", req.url))
     }
   }
@@ -63,7 +47,6 @@ export default clerkMiddleware(async (auth, req) => {
   return NextResponse.next()
 })
 
-// Fixed matcher configuration without capturing groups
 export const config = {
   matcher: [
     // Match all paths except static files and Next.js internals
