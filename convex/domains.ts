@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Create domain
 export const createDomain = mutation({
@@ -15,8 +15,8 @@ export const createDomain = mutation({
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     // Create the domain
     return await ctx.db.insert("domains", {
       clerkDomainId: args.clerkDomainId,
@@ -25,9 +25,9 @@ export const createDomain = mutation({
       name: args.name,
       status: args.status,
       createdAt: args.createdAt,
-    });
+    })
   },
-});
+})
 
 // Update domain
 export const updateDomain = mutation({
@@ -41,19 +41,19 @@ export const updateDomain = mutation({
     const domain = await ctx.db
       .query("domains")
       .withIndex("by_clerk_domain_id", (q) => q.eq("clerkDomainId", args.clerkDomainId))
-      .first();
-    
+      .first()
+
     if (!domain) {
-      throw new Error(`Domain not found for Clerk domain ID: ${args.clerkDomainId}`);
+      throw new Error(`Domain not found for Clerk domain ID: ${args.clerkDomainId}`)
     }
-    
+
     // Update the domain
     return await ctx.db.patch(domain._id, {
       status: args.status,
       updatedAt: args.updatedAt,
-    });
+    })
   },
-});
+})
 
 // Mark domain as deleted
 export const markDomainDeleted = mutation({
@@ -65,16 +65,16 @@ export const markDomainDeleted = mutation({
     const domain = await ctx.db
       .query("domains")
       .withIndex("by_clerk_domain_id", (q) => q.eq("clerkDomainId", args.clerkDomainId))
-      .first();
-    
+      .first()
+
     if (!domain) {
-      throw new Error(`Domain not found for Clerk domain ID: ${args.clerkDomainId}`);
+      throw new Error(`Domain not found for Clerk domain ID: ${args.clerkDomainId}`)
     }
-    
+
     // Mark the domain as deleted
     return await ctx.db.patch(domain._id, {
       isDeleted: true,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})

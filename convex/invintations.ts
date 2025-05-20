@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Create invitation
 export const createInvitation = mutation({
@@ -16,8 +16,8 @@ export const createInvitation = mutation({
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     // Create the invitation
     return await ctx.db.insert("invitations", {
       clerkInvitationId: args.clerkInvitationId,
@@ -27,9 +27,9 @@ export const createInvitation = mutation({
       role: args.role,
       status: args.status,
       createdAt: args.createdAt,
-    });
+    })
   },
-});
+})
 
 // Update invitation status
 export const updateInvitationStatus = mutation({
@@ -44,22 +44,22 @@ export const updateInvitationStatus = mutation({
     const invitation = await ctx.db
       .query("invitations")
       .withIndex("by_clerk_invitation_id", (q) => q.eq("clerkInvitationId", args.clerkInvitationId))
-      .first();
-    
+      .first()
+
     if (!invitation) {
-      throw new Error(`Invitation not found for Clerk invitation ID: ${args.clerkInvitationId}`);
+      throw new Error(`Invitation not found for Clerk invitation ID: ${args.clerkInvitationId}`)
     }
-    
+
     // Update the invitation status
     const updateData: any = {
       status: args.status,
       updatedAt: args.updatedAt,
-    };
-    
-    if (args.acceptedBy) {
-      updateData.acceptedBy = args.acceptedBy;
     }
-    
-    return await ctx.db.patch(invitation._id, updateData);
+
+    if (args.acceptedBy) {
+      updateData.acceptedBy = args.acceptedBy
+    }
+
+    return await ctx.db.patch(invitation._id, updateData)
   },
-});
+})

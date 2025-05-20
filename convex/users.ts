@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Sync user from Clerk webhook
 export const syncUserFromClerk = mutation({
@@ -19,8 +19,8 @@ export const syncUserFromClerk = mutation({
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-    
+      .first()
+
     if (existingUser) {
       // Update existing user
       return await ctx.db.patch(existingUser._id, {
@@ -31,7 +31,7 @@ export const syncUserFromClerk = mutation({
         username: args.username,
         lastSignInAt: args.lastSignInAt,
         updatedAt: args.updatedAt || Date.now(),
-      });
+      })
     } else {
       // Create new user
       return await ctx.db.insert("users", {
@@ -45,10 +45,10 @@ export const syncUserFromClerk = mutation({
         lastSignInAt: args.lastSignInAt,
         createdAt: args.createdAt || Date.now(),
         updatedAt: args.updatedAt,
-      });
+      })
     }
   },
-});
+})
 
 // Mark user as deleted
 export const markUserDeleted = mutation({
@@ -60,19 +60,19 @@ export const markUserDeleted = mutation({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-    
+      .first()
+
     if (!user) {
-      throw new Error(`User not found for Clerk ID: ${args.clerkId}`);
+      throw new Error(`User not found for Clerk ID: ${args.clerkId}`)
     }
-    
+
     // Mark the user as deleted
     return await ctx.db.patch(user._id, {
       isDeleted: true,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})
 
 // Sync organization membership
 export const syncOrganizationMembership = mutation({
@@ -86,30 +86,30 @@ export const syncOrganizationMembership = mutation({
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     if (!tenant) {
-      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`);
+      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`)
     }
-    
+
     // Get the user by Clerk user ID
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkUserId))
-      .first();
-    
+      .first()
+
     if (!user) {
-      throw new Error(`User not found for Clerk user ID: ${args.clerkUserId}`);
+      throw new Error(`User not found for Clerk user ID: ${args.clerkUserId}`)
     }
-    
+
     // Update user with tenant ID and role
     return await ctx.db.patch(user._id, {
       tenantId: tenant._id,
       role: args.role,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})
 
 // Remove organization membership
 export const removeOrganizationMembership = mutation({
@@ -122,30 +122,30 @@ export const removeOrganizationMembership = mutation({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkUserId))
-      .first();
-    
+      .first()
+
     if (!user) {
-      throw new Error(`User not found for Clerk user ID: ${args.clerkUserId}`);
+      throw new Error(`User not found for Clerk user ID: ${args.clerkUserId}`)
     }
-    
+
     // Get the tenant by Clerk org ID
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     if (!tenant) {
-      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`);
+      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`)
     }
-    
+
     // Only remove the tenant association if it matches the specified organization
     if (user.tenantId === tenant._id) {
       return await ctx.db.patch(user._id, {
         tenantId: null,
         updatedAt: Date.now(),
-      });
+      })
     }
-    
-    return user;
+
+    return user
   },
-});
+})

@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Track session
 export const trackSession = mutation({
@@ -22,21 +22,21 @@ export const trackSession = mutation({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkUserId))
-      .first();
-    
+      .first()
+
     // Check if session already exists
     const existingSession = await ctx.db
       .query("sessions")
       .withIndex("by_clerk_session_id", (q) => q.eq("clerkSessionId", args.clerkSessionId))
-      .first();
-    
+      .first()
+
     if (existingSession) {
       // Update existing session
       return await ctx.db.patch(existingSession._id, {
         status: args.status,
         lastActiveAt: args.lastActiveAt,
         updatedAt: Date.now(),
-      });
+      })
     } else {
       // Create new session
       return await ctx.db.insert("sessions", {
@@ -47,10 +47,10 @@ export const trackSession = mutation({
         lastActiveAt: args.lastActiveAt,
         deviceInfo: args.deviceInfo,
         createdAt: args.createdAt,
-      });
+      })
     }
   },
-});
+})
 
 // Update session status
 export const updateSessionStatus = mutation({
@@ -64,17 +64,17 @@ export const updateSessionStatus = mutation({
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_clerk_session_id", (q) => q.eq("clerkSessionId", args.clerkSessionId))
-      .first();
-    
+      .first()
+
     if (!session) {
-      throw new Error(`Session not found for Clerk session ID: ${args.clerkSessionId}`);
+      throw new Error(`Session not found for Clerk session ID: ${args.clerkSessionId}`)
     }
-    
+
     // Update the session status
     return await ctx.db.patch(session._id, {
       status: args.status,
       lastActiveAt: args.lastActiveAt,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})

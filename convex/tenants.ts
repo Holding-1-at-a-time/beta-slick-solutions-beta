@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Sync tenant from Clerk webhook
 export const syncTenantFromClerk = mutation({
@@ -16,8 +16,8 @@ export const syncTenantFromClerk = mutation({
     const existingTenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     if (existingTenant) {
       // Update existing tenant
       return await ctx.db.patch(existingTenant._id, {
@@ -25,7 +25,7 @@ export const syncTenantFromClerk = mutation({
         slug: args.slug,
         logo: args.imageUrl || existingTenant.logo,
         updatedAt: Date.now(),
-      });
+      })
     } else {
       // Create new tenant
       const tenantId = await ctx.db.insert("tenants", {
@@ -39,28 +39,28 @@ export const syncTenantFromClerk = mutation({
         requireDeposit: false,
         depositPercentage: 0.2,
         createdAt: args.createdAt || Date.now(),
-      });
-      
+      })
+
       // If createdBy is provided, update the user with the tenant ID
       if (args.createdBy) {
         const user = await ctx.db
           .query("users")
           .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.createdBy))
-          .first();
-        
+          .first()
+
         if (user) {
           await ctx.db.patch(user._id, {
             tenantId: tenantId,
             role: "admin",
             updatedAt: Date.now(),
-          });
+          })
         }
       }
-      
-      return tenantId;
+
+      return tenantId
     }
   },
-});
+})
 
 // Update tenant from Clerk webhook
 export const updateTenantFromClerk = mutation({
@@ -76,21 +76,21 @@ export const updateTenantFromClerk = mutation({
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     if (!tenant) {
-      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`);
+      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`)
     }
-    
+
     // Update the tenant
     return await ctx.db.patch(tenant._id, {
       name: args.name,
       slug: args.slug,
       logo: args.imageUrl || tenant.logo,
       updatedAt: args.updatedAt || Date.now(),
-    });
+    })
   },
-});
+})
 
 // Mark tenant as deleted
 export const markTenantDeleted = mutation({
@@ -102,16 +102,16 @@ export const markTenantDeleted = mutation({
     const tenant = await ctx.db
       .query("tenants")
       .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-      .first();
-    
+      .first()
+
     if (!tenant) {
-      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`);
+      throw new Error(`Tenant not found for Clerk org ID: ${args.clerkOrgId}`)
     }
-    
+
     // Mark the tenant as deleted
     return await ctx.db.patch(tenant._id, {
       isDeleted: true,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})

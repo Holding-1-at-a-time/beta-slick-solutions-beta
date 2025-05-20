@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { mutation } from "./_generated/server"
+import { v } from "convex/values"
 
 // Sync permission from Clerk webhook
 export const syncPermissionFromClerk = mutation({
@@ -15,24 +15,24 @@ export const syncPermissionFromClerk = mutation({
   },
   handler: async (ctx, args) => {
     // Get the tenant by Clerk org ID if provided
-    let tenantId = undefined;
+    let tenantId = undefined
     if (args.clerkOrgId) {
       const tenant = await ctx.db
         .query("tenants")
         .withIndex("by_clerk_org_id", (q) => q.eq("clerkOrgId", args.clerkOrgId))
-        .first();
-      
+        .first()
+
       if (tenant) {
-        tenantId = tenant._id;
+        tenantId = tenant._id
       }
     }
-    
+
     // Check if permission already exists
     const existingPermission = await ctx.db
       .query("permissions")
       .withIndex("by_clerk_permission_id", (q) => q.eq("clerkPermissionId", args.clerkPermissionId))
-      .first();
-    
+      .first()
+
     if (existingPermission) {
       // Update existing permission
       return await ctx.db.patch(existingPermission._id, {
@@ -41,7 +41,7 @@ export const syncPermissionFromClerk = mutation({
         description: args.description,
         type: args.type,
         updatedAt: args.updatedAt || Date.now(),
-      });
+      })
     } else {
       // Create new permission
       return await ctx.db.insert("permissions", {
@@ -53,10 +53,10 @@ export const syncPermissionFromClerk = mutation({
         description: args.description,
         type: args.type,
         createdAt: args.createdAt || Date.now(),
-      });
+      })
     }
   },
-});
+})
 
 // Mark permission as deleted
 export const markPermissionDeleted = mutation({
@@ -68,16 +68,16 @@ export const markPermissionDeleted = mutation({
     const permission = await ctx.db
       .query("permissions")
       .withIndex("by_clerk_permission_id", (q) => q.eq("clerkPermissionId", args.clerkPermissionId))
-      .first();
-    
+      .first()
+
     if (!permission) {
-      throw new Error(`Permission not found for Clerk permission ID: ${args.clerkPermissionId}`);
+      throw new Error(`Permission not found for Clerk permission ID: ${args.clerkPermissionId}`)
     }
-    
+
     // Mark the permission as deleted
     return await ctx.db.patch(permission._id, {
       isDeleted: true,
       updatedAt: Date.now(),
-    });
+    })
   },
-});
+})
