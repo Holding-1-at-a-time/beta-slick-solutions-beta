@@ -2,6 +2,8 @@ import { Webhook } from "svix"
 import { headers } from "next/headers"
 import type { WebhookEvent } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+
+// Import directly from the Convex HTTP client
 import { ConvexHttpClient } from "convex/browser"
 
 // Initialize the Convex client for server-side operations
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
 
   if (eventType === "user.created") {
     // A new user was created in Clerk
-    await convex.mutation("mutations.createUser", {
+    await convex.mutation("mutations:createUser", {
       clerkId: evt.data.id,
       email: evt.data.email_addresses[0]?.email_address || "",
       firstName: evt.data.first_name || "",
@@ -55,7 +57,7 @@ export async function POST(req: Request) {
     })
   } else if (eventType === "user.updated") {
     // A user was updated in Clerk
-    await convex.mutation("mutations.updateUser", {
+    await convex.mutation("mutations:updateUser", {
       clerkId: evt.data.id,
       email: evt.data.email_addresses[0]?.email_address,
       firstName: evt.data.first_name,
@@ -64,12 +66,12 @@ export async function POST(req: Request) {
     })
   } else if (eventType === "user.deleted") {
     // A user was deleted in Clerk
-    await convex.mutation("mutations.markUserDeleted", {
+    await convex.mutation("mutations:markUserDeleted", {
       clerkId: evt.data.id,
     })
   } else if (eventType === "organization.created") {
     // A new organization was created in Clerk
-    await convex.mutation("mutations.createTenant", {
+    await convex.mutation("mutations:createTenant", {
       clerkOrgId: evt.data.id,
       name: evt.data.name,
       slug: evt.data.slug,
@@ -77,7 +79,7 @@ export async function POST(req: Request) {
     })
   } else if (eventType === "organizationMembership.created") {
     // A user was added to an organization
-    await convex.mutation("mutations.addUserToTenant", {
+    await convex.mutation("mutations:addUserToTenant", {
       clerkUserId: evt.data.public_user_data.user_id,
       clerkOrgId: evt.data.organization.id,
       role: evt.data.role,

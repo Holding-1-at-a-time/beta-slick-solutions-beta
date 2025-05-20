@@ -1,53 +1,58 @@
 import { query } from "./_generated/server"
-import { v } from "convex/values"
+import { getAuthenticatedUser, hasPermission } from "./lib/auth"
+import { ConvexError } from "convex/values"
 
-// Get user profile by Clerk ID
-export const getUserByClerkId = query({
-  args: { clerkId: v.string() },
-  handler: async (ctx, args) => {
+// Get user profile
+export const getUserProfile = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgRole, userType } = getAuthenticatedUser(identity)
+
     const user = await ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
+      .filter((q) => q.eq(q.field("clerkId"), userId))
       .first()
 
-    return user
+    return {
+      ...user,
+      orgRole,
+      userType,
+    }
   },
 })
 
-// List vehicles for a user with tenant isolation
-export const listVehicles = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
+// List vehicles for the current user with tenant isolation
+export const listVehiclesForCurrentUser = query({
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    if (!identity) {
-      throw new Error("Not authenticated")
+    // Check if user has permission to read vehicles
+    if (!hasPermission(orgPermissions, "org:vehicles:read")) {
+      throw new ConvexError("Permission denied: Cannot read vehicles")
     }
-
-    const orgId = identity.tokenIdentifier.split("|")[1]
 
     return await ctx.db
       .query("vehicles")
-      .filter((q) => q.and(q.eq(q.field("userId"), args.userId), q.eq(q.field("tenantId"), orgId)))
+      .filter((q) => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("tenantId"), orgId)))
       .collect()
   },
 })
 
-// List test records with tenant isolation
-export const listTestRecords = query({
+// List all vehicles for the organization (admin/staff only)
+export const listAllVehicles = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    const { orgId, orgRole, orgPermissions } = getAuthenticatedUser(identity)
 
-    if (!identity) {
-      throw new Error("Not authenticated")
+    // Only allow admins or members with proper permissions
+    if (orgRole !== "org:admin" && !hasPermission(orgPermissions, "org:vehicles:read")) {
+      throw new ConvexError("Permission denied: Cannot read all vehicles")
     }
 
-    const orgId = identity.tokenIdentifier.split("|")[1]
-
     return await ctx.db
-      .query("testRecords")
+      .query("vehicles")
       .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .order("desc")
       .collect()
   },
 })
@@ -56,13 +61,7 @@ export const listTestRecords = query({
 export const getClientOverview = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
-
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    const userId = identity.subject
-    const orgId = identity.tokenIdentifier.split("|")[1]
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
     const vehicles = await ctx.db
       .query("vehicles")
@@ -83,6 +82,54 @@ export const getClientOverview = query({
       vehicleCount: vehicles.length,
       appointmentCount: appointments.length,
       invoiceCount: invoices.length,
+    }
+  },
+})
+
+// Get admin dashboard overview
+export const getAdminOverview = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    const { orgId, orgRole } = getAuthenticatedUser(identity)
+
+    // Only allow admins
+    if (orgRole !== "org:admin") {
+      throw new ConvexError("Permission denied: Admin access required")
+    }
+
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .filter((q) => q.eq(q.field("tenantId"), orgId))
+      .collect()
+
+    const appointments = await ctx.db
+      .query("appointments")
+      .filter((q) => q.eq(q.field("tenantId"), orgId))
+      .collect()
+
+    const invoices = await ctx.db
+      .query("invoices")
+      .filter((q) => q.eq(q.field("tenantId"), orgId))
+      .collect()
+
+    // Count users by role
+    const userTenants = await ctx.db
+      .query("userTenants")
+      .filter((q) => q.eq(q.field("tenantId"), orgId))
+      .collect()
+
+    const adminCount = userTenants.filter((ut) => ut.role === "org:admin").length
+    const memberCount = userTenants.filter((ut) => ut.role === "org:member").length
+    const clientCount = userTenants.filter((ut) => ut.role === "org:client").length
+
+    return {
+      vehicleCount: vehicles.length,
+      appointmentCount: appointments.length,
+      invoiceCount: invoices.length,
+      adminCount,
+      memberCount,
+      clientCount,
+      totalUsers: userTenants.length,
     }
   },
 })
