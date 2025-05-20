@@ -10,6 +10,30 @@ const isOrgRoute = createRouteMatcher(["/org/:id(.*)", "/org-selection(.*)"])
 // Define admin routes that require admin permissions
 const isAdminRoute = createRouteMatcher(["/admin(.*)"])
 
+// Add this function to verify orgId in URL matches JWT
+function verifyOrgIdMatchesJWT(auth: any, req: Request) {
+  // Extract orgId from URL path
+  const url = new URL(req.url)
+  const pathSegments = url.pathname.split("/").filter(Boolean)
+
+  // If this is an org route, the first segment should be the orgId
+  if (pathSegments.length > 0) {
+    const urlOrgId = pathSegments[0]
+
+    // If auth has an orgId and it doesn't match the URL orgId, redirect to the correct org
+    if (auth.orgId && auth.orgId !== urlOrgId) {
+      // Only redirect if this is an org route
+      if (isOrgRoute(req)) {
+        const correctOrgUrl = new URL(url.pathname.replace(`/${urlOrgId}`, `/${auth.orgId}`), req.url)
+        return NextResponse.redirect(correctOrgUrl)
+      }
+    }
+  }
+
+  return null
+}
+
+// Update the clerkMiddleware function to include the orgId verification
 export default clerkMiddleware(async (auth, req) => {
   // For debugging in development
   if (process.env.NODE_ENV === "development") {
@@ -26,6 +50,12 @@ export default clerkMiddleware(async (auth, req) => {
     const signInUrl = new URL("/sign-in", req.url)
     signInUrl.searchParams.set("redirect_url", req.url)
     return NextResponse.redirect(signInUrl)
+  }
+
+  // Verify orgId in URL matches JWT
+  const orgIdRedirect = verifyOrgIdMatchesJWT(auth, req)
+  if (orgIdRedirect) {
+    return orgIdRedirect
   }
 
   // Handle organization routes - ensure organization context
