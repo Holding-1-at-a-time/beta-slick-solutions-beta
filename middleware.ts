@@ -63,11 +63,12 @@ export default clerkMiddleware(async (auth, req) => {
   return NextResponse.next()
 })
 
+// Fixed matcher configuration without capturing groups
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files
-    "/((?!_next|[^?]*\\.(html?|css|js|json|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    // Always run for API routes
-    "/(api|trpc)(.*)",
+    // Match all paths except static files and Next.js internals
+    "/((?!_next|api|trpc).*)",
+    "/api/:path*",
+    "/trpc/:path*",
   ],
 }
