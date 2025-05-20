@@ -54,6 +54,23 @@ export default function HeroSection() {
                 <Link href="/contact">Schedule Demo</Link>
               </Button>
             </div>
+            <button
+  type="button"
+  onClick={async () => {
+	await Sentry.startSpan({
+	  name: 'Example Frontend Span',
+	  op: 'test'
+	}, async () => {
+	  const res = await fetch("/api/sentry-example-api");
+	  if (!res.ok) {
+		throw new Error("Sentry Example Frontend Error");
+	  }
+	});
+  }
+  >
+  Break the world
+</button>;
+
 
             {/* Feature bullets */}
             <div className="mt-4 grid gap-3 text-gray-300 sm:grid-cols-2">
