@@ -1,208 +1,161 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useQuery, useMutation, useQueryClient } from "convex/react"
-import { query, mutation } from "@/convex/_generated/api"
+import type React from "react"
+
+import { useState } from "react"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, RefreshCw } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 interface ConfigureRulesProps {
-  onError?: (message: string) => void
+  tenant?: any
+  onError?: (error: Error) => void
 }
 
-export function ConfigureRules({ onError }: ConfigureRulesProps) {
-  const {
-    results: tenant,
-    isLoading,
-    isError,
-    error,
-  } = useQuery(query("getTenantSettings")) || {
-    results: null,
-    isLoading: true,
-    isError: false,
-  }
+export function ConfigureRules({ tenant, onError }: ConfigureRulesProps) {
+  const { toast } = useToast()
+  const updateRules = useMutation(api.admin.updateRules)
 
-  const [requireDeposit, setRequireDeposit] = useState(false)
-  const [depositPercentage, setDepositPercentage] = useState(20)
-  const [urgencyFeeMultiplier, setUrgencyFeeMultiplier] = useState(1.5)
-  const [stripeAccountId, setStripeAccountId] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [localError, setLocalError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
+  const [formError, setFormError] = useState<string | null>(null)
 
-  const queryClient = useQueryClient()
-  const updateRules = useMutation(mutation("updateRules"))
+  const [formData, setFormData] = useState({
+    requireDeposit: tenant?.requireDeposit || false,
+    depositPercentage: tenant?.depositPercentage || 20,
+    urgencyFeeMultiplier: tenant?.urgencyFeeMultiplier || 1.5,
+    stripeAccountId: tenant?.stripeAccountId || "",
+  })
 
-  useEffect(() => {
-    if (tenant) {
-      setRequireDeposit(tenant.requireDeposit || false)
-      setDepositPercentage(tenant.depositPercentage || 20)
-      setUrgencyFeeMultiplier(tenant.urgencyFeeMultiplier || 1.5)
-      setStripeAccountId(tenant.stripeAccountId || "")
-    }
-  }, [tenant])
-
-  const handleRetry = () => {
-    setRetryCount((prev) => prev + 1)
-    setLocalError(null)
-  }
-
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsSubmitting(true)
-    setLocalError(null)
-
-    // Validate inputs
-    if (requireDeposit && (depositPercentage < 1 || depositPercentage > 100)) {
-      const errorMessage = "Deposit percentage must be between 1 and 100"
-      setLocalError(errorMessage)
-      if (onError) onError(errorMessage)
-      setIsSubmitting(false)
-      return
-    }
-
-    if (urgencyFeeMultiplier < 1) {
-      const errorMessage = "Urgency fee multiplier must be at least 1"
-      setLocalError(errorMessage)
-      if (onError) onError(errorMessage)
-      setIsSubmitting(false)
-      return
-    }
+    setFormError(null)
 
     try {
-      await updateRules({
-        requireDeposit,
-        depositPercentage,
-        urgencyFeeMultiplier,
-        stripeAccountId,
+      await updateRules(formData)
+      toast({
+        title: "Business rules updated",
+        description: "Your business rules have been updated successfully.",
       })
-
-      queryClient.invalidateQueries(["getTenantSettings"])
     } catch (error) {
-      console.error("Failed to update rules:", error)
-      const errorMessage =
-        error instanceof Error ? error.message : "An unknown error occurred while updating business rules"
-
-      setLocalError(errorMessage)
+      const err = error as Error
+      setFormError(err.message)
       if (onError) {
-        onError(errorMessage)
+        onError(err)
       }
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
-
-  if (isError) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load tenant settings: {error?.message || "Unknown error"}
-          <div className="mt-4">
-            <Button onClick={handleRetry} size="sm" variant="outline" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Retry
-            </Button>
-          </div>
-        </AlertDescription>
-      </Alert>
-    )
-  }
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Business Rules</CardTitle>
-        <CardDescription>Configure payment and booking policies</CardDescription>
+        <CardDescription>Configure your organization's business rules and policies.</CardDescription>
       </CardHeader>
-      <CardContent>
-        {localError && !onError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{localError}</AlertDescription>
-          </Alert>
-        )}
 
-        <div className="space-y-6 max-w-md">
+      {formError && (
+        <CardContent className="pt-0">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        </CardContent>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">Require Deposit</h3>
-              <p className="text-sm text-muted-foreground">Require customers to pay a deposit when booking</p>
+            <div className="space-y-0.5">
+              <Label htmlFor="requireDeposit">Require Deposit</Label>
+              <p className="text-sm text-muted-foreground">
+                Require customers to pay a deposit before scheduling service.
+              </p>
             </div>
-            <Switch checked={requireDeposit} onCheckedChange={setRequireDeposit} />
+            <Switch
+              id="requireDeposit"
+              checked={formData.requireDeposit}
+              onCheckedChange={(checked) => setFormData({ ...formData, requireDeposit: checked })}
+              disabled={isSubmitting}
+            />
           </div>
 
-          {requireDeposit && (
-            <div>
-              <label className="text-sm font-medium mb-1 block">Deposit Percentage</label>
-              <div className="flex items-center">
+          {formData.requireDeposit && (
+            <div className="space-y-2">
+              <Label htmlFor="depositPercentage">Deposit Percentage</Label>
+              <div className="flex items-center gap-2">
                 <Input
+                  id="depositPercentage"
                   type="number"
                   min="1"
                   max="100"
-                  value={depositPercentage}
-                  onChange={(e) => setDepositPercentage(Number(e.target.value))}
-                  className="max-w-[100px]"
+                  value={formData.depositPercentage}
+                  onChange={(e) =>
+                    setFormData({ ...formData, depositPercentage: Number.parseInt(e.target.value) || 0 })
+                  }
+                  className="flex-1"
+                  disabled={isSubmitting}
                 />
-                <span className="ml-2">%</span>
+                <span className="text-lg">%</span>
               </div>
-              {depositPercentage < 1 || depositPercentage > 100 ? (
-                <p className="text-xs text-destructive mt-1">Percentage must be between 1 and 100</p>
-              ) : null}
+              <p className="text-sm text-muted-foreground">Percentage of the total service cost required as deposit.</p>
             </div>
           )}
 
-          <div>
-            <label className="text-sm font-medium mb-1 block">Urgency Fee Multiplier</label>
-            <div className="flex items-center">
-              <Input
-                type="number"
-                min="1"
-                step="0.1"
-                value={urgencyFeeMultiplier}
-                onChange={(e) => setUrgencyFeeMultiplier(Number(e.target.value))}
-                className="max-w-[100px]"
-              />
-              <span className="ml-2">×</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Multiplier applied to urgent service requests</p>
-            {urgencyFeeMultiplier < 1 ? (
-              <p className="text-xs text-destructive mt-1">Multiplier must be at least 1</p>
-            ) : null}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium mb-1 block">Stripe Account ID</label>
+          <div className="space-y-2">
+            <Label htmlFor="urgencyFeeMultiplier">Urgency Fee Multiplier</Label>
             <Input
-              value={stripeAccountId}
-              onChange={(e) => setStripeAccountId(e.target.value)}
-              placeholder="acct_..."
+              id="urgencyFeeMultiplier"
+              type="number"
+              min="1"
+              step="0.1"
+              value={formData.urgencyFeeMultiplier}
+              onChange={(e) =>
+                setFormData({ ...formData, urgencyFeeMultiplier: Number.parseFloat(e.target.value) || 1 })
+              }
+              disabled={isSubmitting}
             />
-            <p className="text-xs text-muted-foreground mt-1">Your Stripe Connect account ID for payment processing</p>
+            <p className="text-sm text-muted-foreground">
+              Multiplier applied to service cost for urgent requests (e.g., 1.5 = 50% increase).
+            </p>
           </div>
 
-          <div className="pt-4">
-            <Button
-              onClick={handleSave}
-              disabled={
-                isSubmitting ||
-                (requireDeposit && (depositPercentage < 1 || depositPercentage > 100)) ||
-                urgencyFeeMultiplier < 1
-              }
-            >
-              {isSubmitting ? "Saving..." : "Save Rules"}
-            </Button>
+          <div className="space-y-2">
+            <Label htmlFor="stripeAccountId">Stripe Account ID</Label>
+            <Input
+              id="stripeAccountId"
+              value={formData.stripeAccountId}
+              onChange={(e) => setFormData({ ...formData, stripeAccountId: e.target.value })}
+              placeholder="acct_..."
+              disabled={isSubmitting}
+            />
+            <p className="text-sm text-muted-foreground">Your Stripe account ID for processing payments.</p>
           </div>
-        </div>
-      </CardContent>
+        </CardContent>
+
+        <CardFooter>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Rules"
+            )}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   )
 }

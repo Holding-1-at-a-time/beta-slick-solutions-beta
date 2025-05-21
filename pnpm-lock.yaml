@@ -154,7 +154,7 @@ importers:
         version: 0.4.4(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       openai:
         specifier: latest
-        version: 4.102.0(ws@8.18.2)(zod@3.25.17)
+        version: 4.102.0(ws@8.18.2)(zod@3.25.20)
       path:
         specifier: latest
         version: 0.12.7
@@ -199,7 +199,7 @@ importers:
         version: 8.18.2
       zod:
         specifier: latest
-        version: 3.25.17
+        version: 3.25.20
     devDependencies:
       '@types/node':
         specifier: ^22
@@ -3892,8 +3892,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  zod@3.25.17:
-    resolution: {integrity: sha512-8hQzQ/kMOIFbwOgPrm9Sf9rtFHpFUMy4HvN0yEB0spw14aYi0uT5xG5CE2DB9cd51GWNsz+DNO7se1kztHMKnw==}
+  zod@3.25.20:
+    resolution: {integrity: sha512-z03fqpTMDF1G02VLKUMt6vyACE7rNWkh3gpXVHgPTw28NPtDFRGvcpTtPwn2kMKtQ0idtYJUTxchytmnqYswcw==}
 
 snapshots:
 
@@ -6899,7 +6899,7 @@ snapshots:
 
   object-hash@3.0.0: {}
 
-  openai@4.102.0(ws@8.18.2)(zod@3.25.17):
+  openai@4.102.0(ws@8.18.2)(zod@3.25.20):
     dependencies:
       '@types/node': 18.19.103
       '@types/node-fetch': 2.6.12
@@ -6910,7 +6910,7 @@ snapshots:
       node-fetch: 2.7.0
     optionalDependencies:
       ws: 8.18.2
-      zod: 3.25.17
+      zod: 3.25.20
     transitivePeerDependencies:
       - encoding
 
@@ -7631,4 +7631,4 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod@3.25.17: {}
+  zod@3.25.20: {}
