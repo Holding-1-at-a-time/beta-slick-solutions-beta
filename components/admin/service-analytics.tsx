@@ -43,7 +43,7 @@ export function ServiceAnalytics() {
             <BarChart data={chartData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+              <YAxis type="category" dataKey="name" width={150} />
               <Tooltip />
               <Bar dataKey="count" name="Usage Count" fill="#707070" />
             </BarChart>
