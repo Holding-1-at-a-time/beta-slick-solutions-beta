@@ -1,7 +1,7 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
-import { api } from "@/lib/convex"
+import { api } from "@/convex/_generated/api"
 import { revalidatePath } from "next/cache"
 
 // Create a payment intent
