@@ -3,7 +3,6 @@ import type { MutationCtx, QueryCtx, ActionCtx, DatabaseReader } from "./_genera
 import type { Id } from "./_generated/dataModel"
 import { query } from "./_generated/server"
 import { api } from "./_generated/api"
-import type { Auth } from "convex/server"
 
 // Define the structure of the Clerk JWT with custom claims
 type ClerkJWT = {
@@ -63,66 +62,6 @@ export type AuthUser = {
   metadata?: Record<string, any>
 }
 
-export type AuthenticatedUser = {
-  userId: string
-  orgId: string
-  orgRole: string
-  userType: string
-  orgPermissions: string[]
-  email?: string
-  name?: string
-}
-
-export function getAuthenticatedUser(identity: Auth["getUserIdentity"] | null): AuthenticatedUser {
-  if (!identity) {
-    throw new ConvexError("Unauthenticated")
-  }
-
-  // Extract the clerk_id from the JWT token
-  const userId = identity.tokenIdentifier.split("|")[1] || identity.subject
-
-  // Extract organization information from the JWT claims
-  const orgId = identity.org?.id
-  if (!orgId) {
-    throw new ConvexError("No organization found in JWT")
-  }
-
-  // Extract role and permissions from the JWT
-  const orgRole = identity.org?.role || "org:client"
-  const orgPermissions = identity.org?.permissions || []
-
-  // Extract user type from app_data
-  const userType = identity.app_data?.user_type || "client"
-
-  // Extract optional user information
-  const email = identity.email
-  const name = identity.name
-
-  return {
-    userId,
-    orgId,
-    orgRole,
-    userType,
-    orgPermissions,
-    email,
-    name,
-  }
-}
-
-export function hasPermission(permissions: string[], requiredPermission: string): boolean {
-  return permissions.includes(requiredPermission) || permissions.includes("*")
-}
-
-export function requirePermission(
-  permissions: string[],
-  requiredPermission: string,
-  errorMessage = "Permission denied",
-): void {
-  if (!hasPermission(permissions, requiredPermission)) {
-    throw new ConvexError(errorMessage)
-  }
-}
-
 // Get the authenticated user from the JWT
 export async function getUser(ctx: DatabaseReader, tokenIdentifier: string): Promise<AuthUser | null> {
   // Find the user by Clerk ID
@@ -150,21 +89,21 @@ export function getUserPreferences(jwt: ClerkJWT): Record<string, any> {
 }
 
 // Check if the user has the required permission
-// export function hasPermission(jwt: ClerkJWT, requiredPermission: string): boolean {
-//   // If no permissions are required, allow access
-//   if (!requiredPermission) {
-//     return true
-//   }
+export function hasPermission(jwt: ClerkJWT, requiredPermission: string): boolean {
+  // If no permissions are required, allow access
+  if (!requiredPermission) {
+    return true
+  }
 
-//   // If the user is an admin, allow access to everything
-//   if (jwt.org?.role === "admin") {
-//     return true
-//   }
+  // If the user is an admin, allow access to everything
+  if (jwt.org?.role === "admin") {
+    return true
+  }
 
-//   // Check if the user has the specific permission
-//   const userPermissions = jwt.org?.permissions || []
-//   return userPermissions.includes(requiredPermission)
-// }
+  // Check if the user has the specific permission
+  const userPermissions = jwt.org?.permissions || []
+  return userPermissions.includes(requiredPermission)
+}
 
 // Wrapper for queries that require tenant access
 export function withTenantAccess<Args extends Record<string, unknown>, Return>(
@@ -189,7 +128,7 @@ export function withTenantAccess<Args extends Record<string, unknown>, Return>(
     }
 
     // Check if the user has the required permission
-    if (!hasPermission(decodedJwt.org?.permissions || [], requiredPermission)) {
+    if (!hasPermission(decodedJwt, requiredPermission)) {
       throw new ConvexError(`Unauthorized: Missing required permission: ${requiredPermission}`)
     }
 
@@ -232,7 +171,7 @@ export function withTenantMutation<Args extends Record<string, unknown>, Return>
     }
 
     // Check if the user has the required permission
-    if (!hasPermission(decodedJwt.org?.permissions || [], requiredPermission)) {
+    if (!hasPermission(decodedJwt, requiredPermission)) {
       throw new ConvexError(`Unauthorized: Missing required permission: ${requiredPermission}`)
     }
 
@@ -275,7 +214,7 @@ export function withTenantAction<Args extends Record<string, unknown>, Return>(
     }
 
     // Check if the user has the required permission
-    if (!hasPermission(decodedJwt.org?.permissions || [], requiredPermission)) {
+    if (!hasPermission(decodedJwt, requiredPermission)) {
       throw new ConvexError(`Unauthorized: Missing required permission: ${requiredPermission}`)
     }
 

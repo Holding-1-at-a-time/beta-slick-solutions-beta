@@ -35,8 +35,8 @@ export function InvoiceList({ orgId, userId }: InvoiceListProps) {
   }
 
   const handleDateFilter = () => {
-    const start = startDate ? new Date(startDate).getTime() : undefined
-    const end = endDate ? new Date(endDate).getTime() : undefined
+    const start = startDate ? new Date(startDate) : undefined
+    const end = endDate ? new Date(endDate) : undefined
     setFilters((prev) => ({ ...prev, startDate: start, endDate: end }))
   }
 
@@ -149,7 +149,8 @@ export function InvoiceList({ orgId, userId }: InvoiceListProps) {
         <div className="space-y-4">
           {invoices.map((invoice) => (
             <Link
-              href={`/${orgId}/dashboard/client/invoices/${invoice._id}`}
+              href={`/[orgId]/dashboard/client/invoices/${invoice._id}`}
+              as={`/${orgId}/dashboard/client/invoices/${invoice._id}`}
               key={invoice._id}
               className="block border p-4 rounded-lg hover:bg-gray-50 transition-colors"
             >
@@ -157,19 +158,12 @@ export function InvoiceList({ orgId, userId }: InvoiceListProps) {
                 <div>
                   <h3 className="font-medium">Invoice #{invoice.invoiceNumber}</h3>
                   <p className="text-sm text-gray-500">
-                    {formatDate(invoice.createdAt)} • {invoice.description || "Service Invoice"}
+                    {formatDate(invoice.createdAt)} • {invoice.description}
                   </p>
                 </div>
                 <div className="sm:text-right">
                   <p className="font-medium">{formatCurrency(invoice.amount)}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
-                    {invoice.depositPaid && (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
-                        Deposit Paid
-                      </Badge>
-                    )}
-                  </div>
+                  <Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
                 </div>
               </div>
             </Link>

@@ -1,46 +1,45 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { listInvoices } from "@/app/actions/invoices"
+import { useQuery } from "convex/react"
+import { api } from "../convex/_generated/api"
+import { useState } from "react"
 
 export interface InvoiceFilters {
   status?: string
-  startDate?: number
-  endDate?: number
+  startDate?: Date
+  endDate?: Date
   search?: string
 }
 
-export function useInvoices(orgId: string, userId: string, filters: InvoiceFilters = {}) {
-  const [invoices, setInvoices] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    totalPages: 1,
-    totalCount: 0,
-    goToPage: (page: number) => {},
+export function useInvoices(orgId: string, userId: string, filters: InvoiceFilters = {}, page = 1, limit = 10) {
+  const [currentPage, setCurrentPage] = useState(page)
+
+  const result = useQuery(api.invoices.listClientInvoices, {
+    orgId,
+    userId,
+    status: filters.status,
+    startDate: filters.startDate?.getTime(),
+    endDate: filters.endDate?.getTime(),
+    search: filters.search,
+    page: currentPage,
+    limit,
   })
 
-  useEffect(() => {
-    fetchInvoices(1)
-  }, [orgId, userId, filters])
+  const invoices = result?.invoices || []
+  const totalPages = result?.totalPages || 1
+  const loading = result === undefined
 
-  const fetchInvoices = async (page: number) => {
-    try {
-      setLoading(true)
-      const result = await listInvoices(page, { ...filters, userId })
-      setInvoices(result.invoices)
-      setPagination({
-        currentPage: result.currentPage,
-        totalPages: result.totalPages,
-        totalCount: result.totalCount,
-        goToPage: fetchInvoices,
-      })
-      setLoading(false)
-    } catch (error) {
-      console.error("Error fetching invoices:", error)
-      setLoading(false)
-    }
+  const goToPage = (page: number) => {
+    setCurrentPage(page)
   }
 
-  return { invoices, loading, pagination }
+  return {
+    invoices,
+    loading,
+    pagination: {
+      currentPage,
+      totalPages,
+      goToPage,
+    },
+  }
 }

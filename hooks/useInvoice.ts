@@ -1,58 +1,29 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { getInvoiceDetail, createPaymentIntent, confirmPayment } from "@/app/actions/invoices"
+import { useQuery } from "convex/react"
+import { api } from "../convex/_generated/api"
+import { useMutation } from "convex/react"
 
 export function useInvoice(orgId: string, userId: string, invoiceId: string) {
-  const [invoice, setInvoice] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const invoice = useQuery(api.invoices.getInvoiceById, { orgId, userId, invoiceId })
+  const loading = invoice === undefined
 
-  useEffect(() => {
-    fetchInvoice()
-  }, [orgId, userId, invoiceId])
+  const initiatePayment = useMutation(api.invoices.initiateInvoicePayment)
+  const confirmPayment = useMutation(api.invoices.confirmInvoicePayment)
 
-  const fetchInvoice = async () => {
-    try {
-      setLoading(true)
-      const result = await getInvoiceDetail(invoiceId)
-      setInvoice(result)
-      setLoading(false)
-    } catch (error) {
-      console.error("Error fetching invoice:", error)
-      setError("Failed to load invoice")
-      setLoading(false)
-    }
+  const payInvoice = async () => {
+    if (!invoice) return null
+
+    const paymentIntent = await initiatePayment({ orgId, userId, invoiceId })
+    return paymentIntent
   }
 
-  const payInvoice = async (amount?: number) => {
-    try {
-      const paymentAmount = amount || invoice.remainingBalance
-      const paymentIntent = await createPaymentIntent(invoiceId, paymentAmount)
-      return paymentIntent
-    } catch (error) {
-      console.error("Error creating payment intent:", error)
-      throw new Error("Failed to create payment intent")
-    }
-  }
-
-  const confirmInvoicePayment = async (paymentId: string, paymentIntentId: string) => {
-    try {
-      const result = await confirmPayment(paymentId, paymentIntentId)
-      await fetchInvoice() // Refresh invoice data
-      return result
-    } catch (error) {
-      console.error("Error confirming payment:", error)
-      throw new Error("Failed to confirm payment")
-    }
+  const completePayment = async (paymentIntentId: string) => {
+    await confirmPayment({ orgId, userId, invoiceId, paymentIntentId })
   }
 
   return {
     invoice,
     loading,
-    error,
     payInvoice,
-    confirmInvoicePayment,
-    refreshInvoice: fetchInvoice,
+    completePayment,
   }
 }

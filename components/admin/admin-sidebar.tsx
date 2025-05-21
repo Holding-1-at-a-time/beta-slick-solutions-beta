@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useParams } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { BarChart3, Settings, Users, Wrench, Home, ChevronDown, ChevronRight, BrainCircuit } from "lucide-react"
+import { BarChart3, Settings, Users, Wrench, Home, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState } from "react"
@@ -49,11 +49,6 @@ export function AdminSidebar() {
       title: "Analytics",
       href: `/${orgId}/dashboard/admin/analytics`,
       icon: <BarChart3 className="h-5 w-5" />,
-    },
-    {
-      title: "AI Agents",
-      href: `/${orgId}/dashboard/admin/agents`,
-      icon: <BrainCircuit className="h-5 w-5" />,
     },
   ]
 

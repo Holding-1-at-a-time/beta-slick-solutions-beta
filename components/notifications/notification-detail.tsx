@@ -8,7 +8,6 @@ import { toast } from "@/components/ui/use-toast"
 import { Bell } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { AIInsightsCard } from "./ai-insights-card"
 
 interface NotificationDetailProps {
   orgId: string
@@ -142,9 +141,6 @@ export function NotificationDetail({ orgId, userId, notificationId }: Notificati
           </Link>
         </div>
       )}
-
-      {/* Add AI Insights Card */}
-      <AIInsightsCard orgId={orgId} userId={userId} notificationId={notificationId} />
     </div>
   )
 }
