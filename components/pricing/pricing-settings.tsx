@@ -2,170 +2,223 @@
 
 import type React from "react"
 
-import { usePricingSettings } from "@/hooks/usePricingSettings"
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { toast } from "@/components/ui/use-toast"
+import { useState, useEffect } from "react"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useAuth } from "@clerk/nextjs"
+import { LoadingPlaceholder } from "@/components/ui/loading-placeholder"
+import { PricingLogsList } from "./pricing-logs-list"
 
-interface PricingSettingsProps {
-  orgId: string
-  userId: string
-}
+export function PricingSettings({ orgId }: { orgId: string }) {
+  const { userId } = useAuth()
+  const { data: settings, isLoading } = useQuery(api.pricing.getPricingSettings, orgId, userId as string)
+  const updatePricing = useMutation(api.pricing.updatePricingSettings)
 
-export function PricingSettings({ orgId, userId }: PricingSettingsProps) {
-  const { settings, loading, saveSettings } = usePricingSettings(orgId, userId)
-  const [formData, setFormData] = useState<{
-    baseRates: Record<string, number>
-    laborRate: number
-    markup: number
-  } | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    serviceRates: {
+      diagnostic: 0,
+      repair: 0,
+      maintenance: 0,
+    },
+    laborRates: {
+      standard: 0,
+      premium: 0,
+      emergency: 0,
+    },
+    partsMarkup: 0,
+    reason: "",
+  })
 
-  // Initialize form data when settings are loaded
-  if (settings && !formData) {
-    setFormData({
-      baseRates: { ...settings.baseRates },
-      laborRate: settings.laborRate,
-      markup: settings.markup,
-    })
-  }
+  useEffect(() => {
+    if (settings) {
+      setFormData({
+        serviceRates: { ...settings.serviceRates },
+        laborRates: { ...settings.laborRates },
+        partsMarkup: settings.partsMarkup,
+        reason: "",
+      })
+    }
+  }, [settings])
 
-  const handleBaseRateChange = (service: string, value: string) => {
-    if (!formData) return
-
-    setFormData({
-      ...formData,
-      baseRates: {
-        ...formData.baseRates,
-        [service]: Number.parseFloat(value) || 0,
+  const handleServiceRateChange = (field: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      serviceRates: {
+        ...prev.serviceRates,
+        [field]: Number.parseFloat(value) || 0,
       },
-    })
+    }))
   }
 
-  const handleLaborRateChange = (value: string) => {
-    if (!formData) return
-
-    setFormData({
-      ...formData,
-      laborRate: Number.parseFloat(value) || 0,
-    })
+  const handleLaborRateChange = (field: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      laborRates: {
+        ...prev.laborRates,
+        [field]: Number.parseFloat(value) || 0,
+      },
+    }))
   }
 
-  const handleMarkupChange = (value: string) => {
-    if (!formData) return
+  const handlePartsMarkupChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      partsMarkup: Number.parseFloat(value) || 0,
+    }))
+  }
 
-    setFormData({
-      ...formData,
-      markup: Number.parseFloat(value) || 1,
-    })
+  const handleReasonChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      reason: value,
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData) return
-
-    try {
-      setIsSubmitting(true)
-      await saveSettings(formData)
-      toast({
-        title: "Settings saved",
-        description: "Your pricing settings have been updated successfully.",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save pricing settings. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+    await updatePricing(
+      orgId,
+      userId as string,
+      formData.serviceRates,
+      formData.laborRates,
+      formData.partsMarkup,
+      formData.reason,
+    )
+    setFormData((prev) => ({ ...prev, reason: "" }))
   }
 
-  if (loading || !formData) {
-    return (
-      <div className="border rounded-lg p-6 space-y-4">
-        <div className="h-8 bg-gray-200 animate-pulse rounded w-1/4"></div>
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-6 bg-gray-200 animate-pulse rounded w-1/3"></div>
-              <div className="h-6 bg-gray-200 animate-pulse rounded w-1/4"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
+  if (isLoading) {
+    return <LoadingPlaceholder />
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border rounded-lg p-6 space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Base Service Rates</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(formData.baseRates).map(([service, rate]) => (
-            <div key={service} className="flex items-center justify-between">
-              <label className="font-medium capitalize">{service.replace(/_/g, " ")}</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2">$</span>
+    <div className="space-y-8">
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Service Rates (per hour)</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Diagnostic Rate ($)</label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={rate}
-                  onChange={(e) => handleBaseRateChange(service, e.target.value)}
-                  className="border rounded-md pl-8 pr-4 py-2 w-32"
+                  value={formData.serviceRates.diagnostic}
+                  onChange={(e) => handleServiceRateChange("diagnostic", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Repair Rate ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.serviceRates.repair}
+                  onChange={(e) => handleServiceRateChange("repair", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Maintenance Rate ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.serviceRates.maintenance}
+                  onChange={(e) => handleServiceRateChange("maintenance", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
                 />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Labor Rate</h3>
-        <div className="flex items-center">
-          <label className="font-medium mr-4">Hourly Rate</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2">$</span>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Labor Rates (per hour)</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.laborRates.standard}
+                  onChange={(e) => handleLaborRateChange("standard", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Premium Rate ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.laborRates.premium}
+                  onChange={(e) => handleLaborRateChange("premium", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Rate ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.laborRates.emergency}
+                  onChange={(e) => handleLaborRateChange("emergency", e.target.value)}
+                  className="w-full border-gray-300 rounded-md shadow-sm p-2"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-4">Parts Markup</h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Markup Percentage (%)</label>
             <input
               type="number"
               min="0"
-              step="0.01"
-              value={formData.laborRate}
-              onChange={(e) => handleLaborRateChange(e.target.value)}
-              className="border rounded-md pl-8 pr-4 py-2 w-32"
+              step="0.1"
+              value={formData.partsMarkup}
+              onChange={(e) => handlePartsMarkupChange(e.target.value)}
+              className="w-full border-gray-300 rounded-md shadow-sm p-2"
+              required
             />
           </div>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Parts Markup</h3>
-        <div className="flex items-center">
-          <label className="font-medium mr-4">Markup Multiplier</label>
-          <div className="relative">
-            <input
-              type="number"
-              min="1"
-              step="0.01"
-              value={formData.markup}
-              onChange={(e) => handleMarkupChange(e.target.value)}
-              className="border rounded-md px-4 py-2 w-32"
-            />
-            <span className="absolute right-8 top-1/2 transform -translate-y-1/2">×</span>
-          </div>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Change</label>
+          <textarea
+            value={formData.reason}
+            onChange={(e) => handleReasonChange(e.target.value)}
+            className="w-full border-gray-300 rounded-md shadow-sm p-2"
+            rows={3}
+            placeholder="Explain why you're updating these rates..."
+            required
+          />
         </div>
-        <p className="text-sm text-gray-500">
-          Example: A markup of 1.2 means parts cost will be multiplied by 1.2 (20% markup)
-        </p>
-      </div>
 
-      <div className="pt-4 border-t flex justify-end">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : "Save Settings"}
-        </Button>
+        <div className="flex justify-end">
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            Update Pricing
+          </button>
+        </div>
+      </form>
+
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Pricing History</h2>
+        <PricingLogsList orgId={orgId} />
       </div>
-    </form>
+    </div>
   )
 }

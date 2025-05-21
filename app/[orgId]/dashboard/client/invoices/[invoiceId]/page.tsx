@@ -1,18 +1,10 @@
-import { currentUser } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
-import { InvoiceDetail } from "@/components/invoices/invoice-detail"
-import { ConvexClientProvider } from "@/components/ConvexClientProvider"
+import { InvoiceDetail } from "@/components/invoices"
 
-export default async function InvoiceDetailPage({ params }: { params: { orgId: string; invoiceId: string } }) {
-  const user = await currentUser()
-
-  if (!user) {
-    return redirect("/sign-in")
-  }
-
+export default function InvoiceDetailPage({ params }: { params: { orgId: string; invoiceId: string } }) {
   return (
-    <ConvexClientProvider>
-      <InvoiceDetail orgId={params.orgId} userId={user.id} invoiceId={params.invoiceId} />
-    </ConvexClientProvider>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Invoice Details</h1>
+      <InvoiceDetail orgId={params.orgId} invoiceId={params.invoiceId} />
+    </div>
   )
 }

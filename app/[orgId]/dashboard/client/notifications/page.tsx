@@ -1,21 +1,10 @@
-import { currentUser } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
-import { NotificationsList } from "@/components/notifications/notifications-list"
-import { ConvexClientProvider } from "@/components/ConvexClientProvider"
+import { NotificationsList } from "@/components/notifications"
 
-export default async function NotificationsPage({ params }: { params: { orgId: string } }) {
-  const user = await currentUser()
-
-  if (!user) {
-    return redirect("/sign-in")
-  }
-
+export default function NotificationsPage({ params }: { params: { orgId: string } }) {
   return (
-    <ConvexClientProvider>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Notifications</h1>
-        <NotificationsList orgId={params.orgId} userId={user.id} />
-      </div>
-    </ConvexClientProvider>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Notifications</h1>
+      <NotificationsList orgId={params.orgId} />
+    </div>
   )
 }
