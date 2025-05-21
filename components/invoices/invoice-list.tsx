@@ -1,162 +1,141 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { useQuery, useMutation } from "convex/react"
-import { api } from "@/convex/_generated/api"
-import { useAuth } from "@clerk/nextjs"
+import { useInvoices, type InvoiceFilters } from "@/hooks/useInvoices"
 import { SearchInput } from "@/components/ui/search-input"
 import { Pagination } from "@/components/ui/pagination"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { formatCurrency } from "@/lib/utils/format-currency"
 import { formatDate } from "@/lib/utils/format-date"
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
 
-export function InvoiceList({ orgId }: { orgId: string }) {
-  const { userId } = useAuth()
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 10
+interface InvoiceListProps {
+  orgId: string
+  userId: string
+}
 
-  // Use the appropriate query based on whether we're searching or not
-  const queryFn = searchTerm ? api.invoices.searchInvoices : api.invoices.listInvoices
-  const queryArgs = searchTerm
-    ? [orgId, userId as string, searchTerm, { limit: pageSize }]
-    : [orgId, userId as string, statusFilter, { limit: pageSize }]
+export function InvoiceList({ orgId, userId }: InvoiceListProps) {
+  const [filters, setFilters] = useState<InvoiceFilters>({})
+  const { invoices, loading, pagination } = useInvoices(orgId, userId, filters)
 
-  const { data, isLoading } = useQuery(queryFn, ...queryArgs)
-  const invoices = data?.invoices || []
-  const hasNextPage = !!data?.continueCursor
-
-  const payInvoice = useMutation(api.invoices.payInvoice)
-
-  const handlePayInvoice = async (invoiceId: string) => {
-    await payInvoice(orgId, userId as string, invoiceId, "credit_card")
+  const handleSearch = (search: string) => {
+    setFilters((prev) => ({ ...prev, search }))
   }
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
-    setCurrentPage(1)
+  const handleStatusFilter = (status: string) => {
+    setFilters((prev) => ({ ...prev, status: status || undefined }))
   }
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    setStatusFilter(value === "all" ? null : value)
-    setCurrentPage(1)
+  const handleDateFilter = (startDate?: Date, endDate?: Date) => {
+    setFilters((prev) => ({ ...prev, startDate, endDate }))
   }
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    // TODO: Handle pagination with cursor
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800"
+      case "overdue":
+        return "bg-red-100 text-red-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between">
+          <div className="w-1/3 h-10 bg-gray-200 animate-pulse rounded"></div>
+          <div className="w-1/4 h-10 bg-gray-200 animate-pulse rounded"></div>
+        </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="border p-4 rounded-lg space-y-2">
+            <div className="flex justify-between">
+              <div className="w-1/4 h-6 bg-gray-200 animate-pulse rounded"></div>
+              <div className="w-1/6 h-6 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+            <div className="flex justify-between">
+              <div className="w-1/3 h-4 bg-gray-200 animate-pulse rounded"></div>
+              <div className="w-1/5 h-4 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <SearchInput placeholder="Search invoices..." value={searchTerm} onChange={handleSearch} />
-        <select className="border rounded p-2" value={statusFilter || "all"} onChange={handleFilterChange}>
-          <option value="all">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="paid">Paid</option>
-          <option value="overdue">Overdue</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        <SearchInput placeholder="Search invoices..." onSearch={handleSearch} className="w-full sm:w-1/3" />
+        <div className="flex gap-2">
+          <select
+            className="border rounded-md px-3 py-2"
+            onChange={(e) => handleStatusFilter(e.target.value)}
+            value={filters.status || ""}
+          >
+            <option value="">All Statuses</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="overdue">Overdue</option>
+          </select>
+          <input
+            type="date"
+            className="border rounded-md px-3 py-2"
+            onChange={(e) => {
+              const date = e.target.value ? new Date(e.target.value) : undefined
+              handleDateFilter(date, filters.endDate)
+            }}
+          />
+          <input
+            type="date"
+            className="border rounded-md px-3 py-2"
+            onChange={(e) => {
+              const date = e.target.value ? new Date(e.target.value) : undefined
+              handleDateFilter(filters.startDate, date)
+            }}
+          />
+        </div>
       </div>
 
       {invoices.length === 0 ? (
-        <div className="text-center py-8">
+        <div className="text-center py-10 border rounded-lg">
           <p className="text-gray-500">No invoices found</p>
         </div>
       ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Invoice #
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {invoices.map((invoice) => (
-                  <tr key={invoice._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Link
-                        href={`/org/${orgId}/dashboard/client/invoices/${invoice._id}`}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        INV-{invoice._id.slice(-6).toUpperCase()}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">{formatDate(invoice.createdAt)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{formatCurrency(invoice.amount)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          invoice.status === "paid"
-                            ? "bg-green-100 text-green-800"
-                            : invoice.status === "overdue"
-                              ? "bg-red-100 text-red-800"
-                              : invoice.status === "sent"
-                                ? "bg-blue-100 text-blue-800"
-                                : invoice.status === "draft"
-                                  ? "bg-gray-100 text-gray-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {invoice.status === "sent" || invoice.status === "overdue" ? (
-                        <button
-                          onClick={() => handlePayInvoice(invoice._id)}
-                          className="text-white bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm"
-                        >
-                          Pay Now
-                        </button>
-                      ) : (
-                        <Link
-                          href={`/org/${orgId}/dashboard/client/invoices/${invoice._id}`}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          View
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-4">
+          {invoices.map((invoice) => (
+            <Link
+              href={`/[orgId]/dashboard/client/invoices/${invoice._id}`}
+              as={`/${orgId}/dashboard/client/invoices/${invoice._id}`}
+              key={invoice._id}
+              className="block border p-4 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium">Invoice #{invoice.invoiceNumber}</h3>
+                  <p className="text-sm text-gray-500">
+                    {formatDate(invoice.createdAt)} • {invoice.description}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">{formatCurrency(invoice.amount)}</p>
+                  <Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
-          <Pagination
-            currentPage={currentPage}
-            totalPages={Math.ceil(invoices.length / pageSize)}
-            onPageChange={handlePageChange}
-            hasNextPage={hasNextPage}
-          />
-        </>
+      {pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          onPageChange={pagination.goToPage}
+        />
       )}
     </div>
   )

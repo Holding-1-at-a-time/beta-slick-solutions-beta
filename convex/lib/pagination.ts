@@ -1,11 +1,6 @@
 import { v } from "convex/values"
 
-export const paginationOptsValidator = v.object({
+export const paginationOptsValidator = {
+  page: v.number(),
   limit: v.number(),
-  cursor: v.optional(v.string()),
-})
-
-export type PaginationOpts = {
-  limit: number
-  cursor?: string
 }

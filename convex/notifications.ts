@@ -1,146 +1,136 @@
-import { query, mutation } from "./_generated/server"
+import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
-import { paginationOptsValidator } from "./lib/pagination"
+import { getAuthenticatedUser } from "./lib/auth"
+import { ConvexError } from "convex/values"
 
-// Get notifications for the user
-export const getNotifications = query({
+// List notifications for the current user with tenant isolation
+export const listNotifications = query({
   args: {
     orgId: v.string(),
     userId: v.string(),
-    paginationOpts: v.optional(paginationOptsValidator),
-    unreadOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId, paginationOpts, unreadOnly } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
-    // Start with tenant isolation and user filter
-    let notificationsQuery = ctx.db
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot access other user's notifications")
+    }
+
+    // Get the notifications for this user and tenant
+    const notifications = await ctx.db
       .query("notifications")
-      .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("tenantId"), orgId)))
+      .order("desc")
+      .collect()
 
-    // Filter by read status if requested
-    if (unreadOnly) {
-      notificationsQuery = notificationsQuery.filter((q) => q.eq(q.field("isRead"), false))
-    }
-
-    // Sort by creation date (newest first)
-    notificationsQuery = notificationsQuery.order("desc")
-
-    // Apply pagination if provided
-    if (paginationOpts) {
-      const { limit, cursor } = paginationOpts
-      if (cursor) {
-        notificationsQuery = notificationsQuery.paginate({ cursor, limit })
-      } else {
-        notificationsQuery = notificationsQuery.paginate({ limit })
-      }
-
-      const paginationResult = await notificationsQuery
-      return {
-        notifications: paginationResult.page,
-        continueCursor: paginationResult.continueCursor,
-      }
-    }
-
-    // If no pagination, return all results
-    const notifications = await notificationsQuery.collect()
-    return { notifications, continueCursor: null }
+    return notifications
   },
 })
 
-// Get a single notification
-export const getNotification = query({
+// Get notification by ID
+export const getNotificationById = query({
   args: {
     orgId: v.string(),
     userId: v.string(),
     notificationId: v.id("notifications"),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId, notificationId } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
-    const notification = await ctx.db.get(notificationId)
-
-    // Ensure tenant isolation and user access
-    if (!notification || notification.tenantId !== orgId || notification.userId !== userId) {
-      return null
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot access other user's notifications")
     }
 
-    return notification
+    // Get the notification
+    const notification = await ctx.db.get(args.notificationId)
+
+    // Verify the notification exists and belongs to this user and tenant
+    if (!notification || notification.tenantId !== orgId || notification.userId !== userId) {
+      throw new ConvexError("Notification not found or access denied")
+    }
+
+    // If the notification has a related entity, fetch it
+    let relatedEntity = null
+    if (notification.entityId && notification.entityType) {
+      try {
+        relatedEntity = await ctx.db.get(notification.entityId)
+      } catch (error) {
+        // Entity might not exist anymore
+      }
+    }
+
+    return {
+      ...notification,
+      relatedEntity,
+    }
   },
 })
 
-// Mark a notification as read
-export const markNotificationRead = mutation({
+// Mark notification as read
+export const markNotificationAsRead = mutation({
   args: {
     orgId: v.string(),
     userId: v.string(),
     notificationId: v.id("notifications"),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId, notificationId } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
-    const notification = await ctx.db.get(notificationId)
-
-    // Ensure tenant isolation and user access
-    if (!notification || notification.tenantId !== orgId || notification.userId !== userId) {
-      throw new Error("Notification not found or access denied")
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot modify other user's notifications")
     }
 
-    // Update notification status
-    await ctx.db.patch(notificationId, {
-      isRead: true,
+    // Get the notification
+    const notification = await ctx.db.get(args.notificationId)
+
+    // Verify the notification exists and belongs to this user and tenant
+    if (!notification || notification.tenantId !== orgId || notification.userId !== userId) {
+      throw new ConvexError("Notification not found or access denied")
+    }
+
+    // Mark the notification as read
+    await ctx.db.patch(args.notificationId, {
+      read: true,
+      readAt: Date.now(),
     })
 
     return { success: true }
   },
 })
 
-// Mark all notifications as read
-export const markAllNotificationsRead = mutation({
+// Delete notification
+export const deleteNotification = mutation({
   args: {
     orgId: v.string(),
     userId: v.string(),
+    notificationId: v.id("notifications"),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
-    // Get all unread notifications for this user
-    const unreadNotifications = await ctx.db
-      .query("notifications")
-      .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .filter((q) => q.eq(q.field("userId"), userId))
-      .filter((q) => q.eq(q.field("isRead"), false))
-      .collect()
-
-    // Update each notification
-    for (const notification of unreadNotifications) {
-      await ctx.db.patch(notification._id, {
-        isRead: true,
-      })
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot delete other user's notifications")
     }
 
-    return { success: true, count: unreadNotifications.length }
-  },
-})
+    // Get the notification
+    const notification = await ctx.db.get(args.notificationId)
 
-// Get unread notification count
-export const getUnreadNotificationCount = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, userId } = args
+    // Verify the notification exists and belongs to this user and tenant
+    if (!notification || notification.tenantId !== orgId || notification.userId !== userId) {
+      throw new ConvexError("Notification not found or access denied")
+    }
 
-    // Count unread notifications
-    const unreadNotifications = await ctx.db
-      .query("notifications")
-      .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .filter((q) => q.eq(q.field("userId"), userId))
-      .filter((q) => q.eq(q.field("isRead"), false))
-      .collect()
+    // Delete the notification
+    await ctx.db.delete(args.notificationId)
 
-    return { count: unreadNotifications.length }
+    return { success: true }
   },
 })

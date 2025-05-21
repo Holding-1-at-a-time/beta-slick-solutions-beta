@@ -1,10 +1,18 @@
-import { DynamicPricingLogDetail } from "@/components/pricing"
+import { currentUser } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
+import { DynamicPricingLogDetail } from "@/components/pricing/dynamic-pricing-log-detail"
+import { ConvexClientProvider } from "@/components/ConvexClientProvider"
 
-export default function PricingLogDetailPage({ params }: { params: { orgId: string; logId: string } }) {
+export default async function PricingLogDetailPage({ params }: { params: { orgId: string; logId: string } }) {
+  const user = await currentUser()
+
+  if (!user) {
+    return redirect("/sign-in")
+  }
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Pricing Change Details</h1>
-      <DynamicPricingLogDetail orgId={params.orgId} logId={params.logId} />
-    </div>
+    <ConvexClientProvider>
+      <DynamicPricingLogDetail orgId={params.orgId} userId={user.id} logId={params.logId} />
+    </ConvexClientProvider>
   )
 }

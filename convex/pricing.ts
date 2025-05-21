@@ -1,39 +1,47 @@
-import { query, mutation } from "./_generated/server"
+import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getAuthenticatedUser, hasPermission } from "./lib/auth"
+import { ConvexError } from "convex/values"
 import { paginationOptsValidator } from "./lib/pagination"
 
-// Get pricing settings for the tenant
+// Get pricing settings for the current tenant
 export const getPricingSettings = query({
   args: {
     orgId: v.string(),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
-    const { orgId } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    // Get the most recent pricing settings for this tenant
+    // Check if user has permission to read pricing settings
+    if (!hasPermission(orgPermissions, "org:pricing:read")) {
+      throw new ConvexError("Permission denied: Cannot read pricing settings")
+    }
+
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot access pricing settings")
+    }
+
+    // Get the pricing settings for this tenant
     const settings = await ctx.db
       .query("pricingSettings")
       .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .order("desc")
       .first()
 
-    // If no settings exist, return default values
+    // If no settings exist, return default settings
     if (!settings) {
       return {
-        serviceRates: {
-          diagnostic: 75,
-          repair: 95,
-          maintenance: 65,
+        baseRates: {
+          diagnostic: 100,
+          oil_change: 50,
+          tire_rotation: 75,
+          brake_service: 150,
+          engine_repair: 500,
         },
-        laborRates: {
-          standard: 85,
-          premium: 110,
-          emergency: 150,
-        },
-        partsMarkup: 15, // 15% markup
-        updatedAt: Date.now(),
-        updatedBy: "system",
+        laborRate: 125,
+        markup: 1.2,
       }
     }
 
@@ -41,154 +49,177 @@ export const getPricingSettings = query({
   },
 })
 
-// Update pricing settings
+// Update pricing settings for the current tenant
 export const updatePricingSettings = mutation({
   args: {
     orgId: v.string(),
     userId: v.string(),
-    serviceRates: v.object({
-      diagnostic: v.number(),
-      repair: v.number(),
-      maintenance: v.number(),
+    settings: v.object({
+      baseRates: v.record(v.string(), v.number()),
+      laborRate: v.number(),
+      markup: v.number(),
     }),
-    laborRates: v.object({
-      standard: v.number(),
-      premium: v.number(),
-      emergency: v.number(),
-    }),
-    partsMarkup: v.number(),
-    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId, serviceRates, laborRates, partsMarkup, reason } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions, orgRole } = getAuthenticatedUser(identity)
 
-    // Get current settings to log changes
-    const currentSettings = await ctx.db
+    // Only allow admins to update pricing settings
+    if (orgRole !== "org:admin" && !hasPermission(orgPermissions, "org:pricing:write")) {
+      throw new ConvexError("Permission denied: Cannot update pricing settings")
+    }
+
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot update pricing settings")
+    }
+
+    // Get the existing pricing settings for this tenant
+    const existingSettings = await ctx.db
       .query("pricingSettings")
       .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .order("desc")
       .first()
 
-    // Insert new settings
-    await ctx.db.insert("pricingSettings", {
-      tenantId: orgId,
-      serviceRates,
-      laborRates,
-      partsMarkup,
-      updatedAt: Date.now(),
-      updatedBy: userId,
-    })
-
-    // Log changes if there are existing settings
-    if (currentSettings) {
-      // Log service rate changes
-      for (const [key, newValue] of Object.entries(serviceRates)) {
-        const oldValue = currentSettings.serviceRates[key]
-        if (oldValue !== newValue) {
-          await ctx.db.insert("pricingLogs", {
-            tenantId: orgId,
-            changeType: "service_rate",
-            fieldName: key,
-            oldValue,
-            newValue,
-            reason,
-            updatedAt: Date.now(),
-            updatedBy: userId,
-          })
-        }
-      }
-
-      // Log labor rate changes
-      for (const [key, newValue] of Object.entries(laborRates)) {
-        const oldValue = currentSettings.laborRates[key]
-        if (oldValue !== newValue) {
-          await ctx.db.insert("pricingLogs", {
-            tenantId: orgId,
-            changeType: "labor_rate",
-            fieldName: key,
-            oldValue,
-            newValue,
-            reason,
-            updatedAt: Date.now(),
-            updatedBy: userId,
-          })
-        }
-      }
-
-      // Log parts markup changes
-      if (currentSettings.partsMarkup !== partsMarkup) {
-        await ctx.db.insert("pricingLogs", {
-          tenantId: orgId,
-          changeType: "parts_markup",
-          fieldName: "markup_percentage",
-          oldValue: currentSettings.partsMarkup,
-          newValue: partsMarkup,
-          reason,
-          updatedAt: Date.now(),
-          updatedBy: userId,
-        })
-      }
+    // If settings exist, update them
+    if (existingSettings) {
+      await ctx.db.patch(existingSettings._id, {
+        baseRates: args.settings.baseRates,
+        laborRate: args.settings.laborRate,
+        markup: args.settings.markup,
+        updatedAt: Date.now(),
+      })
+    } else {
+      // Otherwise, create new settings
+      await ctx.db.insert("pricingSettings", {
+        tenantId: orgId,
+        baseRates: args.settings.baseRates,
+        laborRate: args.settings.laborRate,
+        markup: args.settings.markup,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
     }
+
+    // Create a pricing log entry
+    await ctx.db.insert("pricingLogs", {
+      tenantId: orgId,
+      userId,
+      action: existingSettings ? "update" : "create",
+      settings: args.settings,
+      timestamp: Date.now(),
+    })
 
     return { success: true }
   },
 })
 
-// Get pricing change logs
-export const getPricingLogs = query({
+// List pricing logs for the current tenant with pagination
+export const listPricingLogs = query({
   args: {
     orgId: v.string(),
     userId: v.string(),
-    paginationOpts: v.optional(paginationOptsValidator),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    search: v.optional(v.string()),
+    ...paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    const { orgId, paginationOpts } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    // Query with tenant isolation
-    let logsQuery = ctx.db
-      .query("pricingLogs")
-      .filter((q) => q.eq(q.field("tenantId"), orgId))
-      .order("desc")
-
-    // Apply pagination if provided
-    if (paginationOpts) {
-      const { limit, cursor } = paginationOpts
-      if (cursor) {
-        logsQuery = logsQuery.paginate({ cursor, limit })
-      } else {
-        logsQuery = logsQuery.paginate({ limit })
-      }
-
-      const paginationResult = await logsQuery
-      return {
-        logs: paginationResult.page,
-        continueCursor: paginationResult.continueCursor,
-      }
+    // Check if user has permission to read pricing logs
+    if (!hasPermission(orgPermissions, "org:pricing:read")) {
+      throw new ConvexError("Permission denied: Cannot read pricing logs")
     }
 
-    // If no pagination, return all results
-    const logs = await logsQuery.collect()
-    return { logs, continueCursor: null }
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot access pricing logs")
+    }
+
+    // Build the query
+    let logsQuery = ctx.db.query("pricingLogs").filter((q) => q.eq(q.field("tenantId"), orgId))
+
+    // Apply filters if provided
+    if (args.startDate) {
+      logsQuery = logsQuery.filter((q) => q.gte(q.field("timestamp"), args.startDate!))
+    }
+
+    if (args.endDate) {
+      logsQuery = logsQuery.filter((q) => q.lte(q.field("timestamp"), args.endDate!))
+    }
+
+    // Count total for pagination
+    const total = await logsQuery.collect()
+    const totalCount = total.length
+    const totalPages = Math.ceil(totalCount / args.limit)
+
+    // Apply pagination
+    const skip = (args.page - 1) * args.limit
+    const logs = await logsQuery.order("desc").skip(skip).take(args.limit).collect()
+
+    // Fetch user information for each log
+    const logsWithUsers = await Promise.all(
+      logs.map(async (log) => {
+        const user = await ctx.db
+          .query("users")
+          .filter((q) => q.eq(q.field("clerkId"), log.userId))
+          .first()
+
+        return {
+          ...log,
+          user: user ? { name: user.name, email: user.email } : null,
+        }
+      }),
+    )
+
+    return {
+      logs: logsWithUsers,
+      totalPages,
+      currentPage: args.page,
+      totalCount,
+    }
   },
 })
 
-// Get a specific pricing log
-export const getPricingLog = query({
+// Get pricing log by ID
+export const getPricingLogById = query({
   args: {
     orgId: v.string(),
     userId: v.string(),
     logId: v.id("pricingLogs"),
   },
   handler: async (ctx, args) => {
-    const { orgId, logId } = args
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    const log = await ctx.db.get(logId)
-
-    // Ensure tenant isolation
-    if (!log || log.tenantId !== orgId) {
-      return null
+    // Check if user has permission to read pricing logs
+    if (!hasPermission(orgPermissions, "org:pricing:read")) {
+      throw new ConvexError("Permission denied: Cannot read pricing logs")
     }
 
-    return log
+    // Verify the requested userId matches the authenticated user
+    if (args.userId !== userId) {
+      throw new ConvexError("Permission denied: Cannot access pricing logs")
+    }
+
+    // Get the pricing log
+    const log = await ctx.db.get(args.logId)
+
+    // Verify the log exists and belongs to this tenant
+    if (!log || log.tenantId !== orgId) {
+      throw new ConvexError("Pricing log not found or access denied")
+    }
+
+    // Get the user who created the log
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), log.userId))
+      .first()
+
+    return {
+      ...log,
+      user: user ? { name: user.name, email: user.email } : null,
+    }
   },
 })

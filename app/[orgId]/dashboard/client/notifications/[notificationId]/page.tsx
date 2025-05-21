@@ -1,10 +1,22 @@
-import { NotificationDetail } from "@/components/notifications"
+import { currentUser } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
+import { NotificationDetail } from "@/components/notifications/notification-detail"
+import { ConvexClientProvider } from "@/components/ConvexClientProvider"
 
-export default function NotificationDetailPage({ params }: { params: { orgId: string; notificationId: string } }) {
+export default async function NotificationDetailPage({
+  params,
+}: {
+  params: { orgId: string; notificationId: string }
+}) {
+  const user = await currentUser()
+
+  if (!user) {
+    return redirect("/sign-in")
+  }
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Notification Details</h1>
-      <NotificationDetail orgId={params.orgId} notificationId={params.notificationId} />
-    </div>
+    <ConvexClientProvider>
+      <NotificationDetail orgId={params.orgId} userId={user.id} notificationId={params.notificationId} />
+    </ConvexClientProvider>
   )
 }
