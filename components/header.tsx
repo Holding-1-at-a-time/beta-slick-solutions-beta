@@ -3,12 +3,19 @@
 import Link from "next/link"
 import { SignedIn, SignedOut, UserButton, OrganizationSwitcher } from "@clerk/nextjs"
 import { useOrganization } from "@clerk/nextjs"
+import { useState } from "react"
+import { Menu, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useMobile } from "@/hooks/use-mobile"
+import { motion, AnimatePresence } from "framer-motion"
 
 export default function Header() {
   const { organization, isLoaded } = useOrganization()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { isMobile } = useMobile()
 
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b border-gray-200 bg-white sticky top-0 z-30">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl font-bold">
@@ -31,16 +38,18 @@ export default function Header() {
 
         <div className="flex items-center gap-4">
           <SignedIn>
-            <OrganizationSwitcher
-              hidePersonal
-              appearance={{
-                elements: {
-                  rootBox: "relative",
-                  organizationSwitcherTrigger:
-                    "flex justify-between items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium shadow-sm hover:bg-gray-50 focus:outline-none",
-                },
-              }}
-            />
+            {!isMobile && (
+              <OrganizationSwitcher
+                hidePersonal
+                appearance={{
+                  elements: {
+                    rootBox: "relative",
+                    organizationSwitcherTrigger:
+                      "flex justify-between items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium shadow-sm hover:bg-gray-50 focus:outline-none",
+                  },
+                }}
+              />
+            )}
             <UserButton
               afterSignOutUrl="/"
               appearance={{
@@ -49,6 +58,16 @@ export default function Header() {
                 },
               }}
             />
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden"
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
+            )}
           </SignedIn>
 
           <SignedOut>
@@ -69,6 +88,51 @@ export default function Header() {
           </SignedOut>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="md:hidden border-t border-gray-200 bg-white overflow-hidden"
+          >
+            <div className="container mx-auto px-4 py-3 space-y-3">
+              <SignedIn>
+                <Link
+                  href="/dashboard"
+                  className="block py-2 text-base font-medium text-gray-900 hover:text-primary"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Dashboard
+                </Link>
+                {organization && (
+                  <Link
+                    href={`/org/${organization.id}/settings`}
+                    className="block py-2 text-base font-medium text-gray-900 hover:text-primary"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Organization Settings
+                  </Link>
+                )}
+                <div className="py-2">
+                  <OrganizationSwitcher
+                    hidePersonal
+                    appearance={{
+                      elements: {
+                        rootBox: "w-full",
+                        organizationSwitcherTrigger:
+                          "w-full flex justify-between items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium shadow-sm hover:bg-gray-50 focus:outline-none",
+                      },
+                    }}
+                  />
+                </div>
+              </SignedIn>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   )
 }

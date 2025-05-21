@@ -6,8 +6,10 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { usePermissions } from "@/hooks/use-permissions"
-import { Home, Car, Calendar, FileText, Settings, Users, BarChart, Menu, X } from "lucide-react"
-import { useState, useEffect } from "react"
+import { Home, Car, Calendar, FileText, Settings, Users, BarChart, Menu, X, ChevronRight } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { useMobile } from "@/hooks/use-mobile"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface SidebarProps {
   orgId: string
@@ -17,27 +19,13 @@ export default function Sidebar({ orgId }: SidebarProps) {
   const pathname = usePathname()
   const { isAdmin, isMember, can } = usePermissions()
   const [isOpen, setIsOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-
-  // Check if we're on mobile
-  useEffect(() => {
-    const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 1024)
-    }
-
-    checkIfMobile()
-    window.addEventListener("resize", checkIfMobile)
-
-    return () => {
-      window.removeEventListener("resize", checkIfMobile)
-    }
-  }, [])
+  const { isMobile, isMobileOrTablet } = useMobile()
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Close sidebar when clicking outside on mobile
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const sidebar = document.getElementById("sidebar")
-      if (isMobile && isOpen && sidebar && !sidebar.contains(event.target as Node)) {
+      if (isMobile && isOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
     }
@@ -54,6 +42,19 @@ export default function Sidebar({ orgId }: SidebarProps) {
       setIsOpen(false)
     }
   }, [pathname, isMobile])
+
+  // Prevent body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "auto"
+    }
+
+    return () => {
+      document.body.style.overflow = "auto"
+    }
+  }, [isMobile, isOpen])
 
   const routes = [
     {
@@ -112,58 +113,100 @@ export default function Sidebar({ orgId }: SidebarProps) {
 
   return (
     <>
+      {/* Mobile overlay */}
+      <AnimatePresence>
+        {isMobile && isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-30 bg-black"
+            onClick={() => setIsOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Mobile menu button */}
-      {isMobile && (
+      {isMobileOrTablet && (
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden fixed left-4 top-4 z-50"
+          className="fixed left-4 top-4 z-50 lg:hidden bg-white/80 backdrop-blur-sm shadow-sm border"
           onClick={() => setIsOpen(!isOpen)}
+          aria-label={isOpen ? "Close menu" : "Open menu"}
         >
-          {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={isOpen ? "close" : "open"}
+              initial={{ rotate: -90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </motion.div>
+          </AnimatePresence>
         </Button>
       )}
 
       {/* Sidebar */}
-      <div
-        id="sidebar"
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:w-64 lg:shrink-0",
-          isOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-        <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-primary">Navigation</h2>
-          </div>
-          <ScrollArea className="flex-1">
-            <nav className="p-4 space-y-1">
-              {routes.map((route) => {
-                // Skip if permission is required but user doesn't have it
-                if (route.permission && !can(route.permission)) {
-                  return null
-                }
+      <AnimatePresence>
+        <motion.div
+          ref={sidebarRef}
+          className={cn(
+            "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 shadow-lg lg:shadow-none transition-transform lg:translate-x-0 lg:static lg:w-64 lg:shrink-0",
+            isOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+          initial={isMobileOrTablet ? { x: "-100%" } : false}
+          animate={isMobileOrTablet ? { x: isOpen ? 0 : "-100%" } : {}}
+          transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+        >
+          <div className="flex flex-col h-full">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-primary">Navigation</h2>
+              {isMobileOrTablet && (
+                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
+            <ScrollArea className="flex-1 touch-auto">
+              <nav className="p-4 space-y-1">
+                {routes.map((route) => {
+                  // Skip if permission is required but user doesn't have it
+                  if (route.permission && !can(route.permission)) {
+                    return null
+                  }
 
-                return (
-                  <Link
-                    key={route.href}
-                    href={route.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      pathname === route.href
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <route.icon className="h-5 w-5" />
-                    {route.title}
-                  </Link>
-                )
-              })}
-            </nav>
-          </ScrollArea>
-        </div>
-      </div>
+                  const isActive = pathname === route.href
+
+                  return (
+                    <Link
+                      key={route.href}
+                      href={route.href}
+                      className={cn(
+                        "flex items-center justify-between rounded-md px-3 py-3 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <route.icon className="h-5 w-5" />
+                        {route.title}
+                      </div>
+                      {isActive && <ChevronRight className="h-4 w-4" />}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </ScrollArea>
+            <div className="p-4 border-t border-gray-200 text-xs text-gray-500">
+              <p>© 2023 SaaS Platform</p>
+            </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </>
   )
 }
