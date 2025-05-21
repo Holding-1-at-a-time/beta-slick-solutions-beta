@@ -1,13 +1,12 @@
 "use client"
 
 import type React from "react"
-import { usePermissions } from "@/hooks/use-permissions"
-import type { Permission } from "@/lib/permissions"
+import { useAuthInfo } from "@/hooks/use-auth-info"
 
 type PermissionGuardProps = {
   children: React.ReactNode
-  permission?: Permission
-  permissions?: Permission[]
+  permission?: string
+  permissions?: string[]
   requireAll?: boolean
   fallback?: React.ReactNode
 }
@@ -19,10 +18,29 @@ export default function PermissionGuard({
   requireAll = false,
   fallback = null,
 }: PermissionGuardProps) {
-  const { can, canAny, canAll } = usePermissions()
+  const { authInfo } = useAuthInfo()
 
-  // Check if the user has the required permissions
-  const hasAccess = permission ? can(permission) : requireAll ? canAll(permissions) : canAny(permissions)
+  if (!authInfo) {
+    return <>{fallback}</>
+  }
+
+  const { orgPermissions, orgRole } = authInfo
+
+  // Admin role always has access
+  if (orgRole === "org:admin") {
+    return <>{children}</>
+  }
+
+  // Check permissions
+  let hasAccess = false
+
+  if (permission) {
+    hasAccess = orgPermissions.includes(permission)
+  } else if (permissions.length > 0) {
+    hasAccess = requireAll
+      ? permissions.every((p) => orgPermissions.includes(p))
+      : permissions.some((p) => orgPermissions.includes(p))
+  }
 
   if (!hasAccess) {
     return <>{fallback}</>

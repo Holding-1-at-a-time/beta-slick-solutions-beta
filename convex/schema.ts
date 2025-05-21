@@ -1,96 +1,125 @@
-import { defineSchema, defineTable, s } from "convex/schema"
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
 export default defineSchema({
-  // Users table with tenant isolation
-  users: defineTable({
-    clerkId: s.string(),
-    email: s.string(),
-    firstName: s.string(),
-    lastName: s.string(),
-    imageUrl: s.string().optional(),
-    role: s.string(), // "admin" | "member" | "client"
-    isDeleted: s.boolean().optional(),
-    deletedAt: s.number().optional(),
-    createdAt: s.number(),
-  }),
+  // Existing tables...
 
-  // Tenants table (organizations)
-  tenants: defineTable({
-    clerkOrgId: s.string(),
-    name: s.string(),
-    slug: s.string(),
-    imageUrl: s.string().optional(),
-    createdAt: s.number(),
-  }),
-
-  // User-Tenant relationship table (for many-to-many)
-  userTenants: defineTable({
-    userId: s.id("users"),
-    tenantId: s.string(), // Clerk org ID
-    role: s.string(), // "org:admin" | "org:member" | "org:client"
-    createdAt: s.number(),
-  }),
-
-  // Test records for tenant isolation testing
-  testRecords: defineTable({
-    message: s.string(),
-    userId: s.string(),
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Vehicles table with tenant isolation
-  vehicles: defineTable({
-    make: s.string(),
-    model: s.string(),
-    year: s.number(),
-    licensePlate: s.string().optional(),
-    userId: s.string(), // Owner of the vehicle
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Assessments table with tenant isolation
-  assessments: defineTable({
-    vehicleId: s.id("vehicles"),
-    status: s.string(), // "pending" | "in_progress" | "completed"
-    description: s.string(),
-    images: s.array(s.string()).optional(),
-    userId: s.string(), // User who created the assessment
-    assignedToId: s.string().optional(), // Staff member assigned
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Appointments table with tenant isolation
+  // Member-related tables
   appointments: defineTable({
-    vehicleId: s.id("vehicles"),
-    assessmentId: s.id("assessments").optional(),
-    date: s.number(), // Timestamp
-    status: s.string(), // "scheduled" | "in_progress" | "completed" | "cancelled"
-    serviceType: s.string(),
-    userId: s.string(), // User who booked the appointment
-    assignedToId: s.string().optional(), // Staff member assigned
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
+    tenantId: v.string(),
+    userId: v.string(), // client user ID
+    assignedToId: v.string(), // staff member ID
+    vehicleId: v.id("vehicles"),
+    assessmentId: v.optional(v.id("assessments")),
+    date: v.number(), // timestamp
+    time: v.string(),
+    duration: v.number(), // in minutes
+    serviceType: v.string(),
+    status: v.string(), // "scheduled", "in_progress", "completed", "cancelled"
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
   }),
 
-  // Invoices table with tenant isolation
   invoices: defineTable({
-    appointmentId: s.id("appointments").optional(),
-    assessmentId: s.id("assessments").optional(),
-    amount: s.number(),
-    status: s.string(), // "draft" | "sent" | "paid" | "overdue"
-    dueDate: s.number(), // Timestamp
-    items: s.array(
-      s.object({
-        description: s.string(),
-        quantity: s.number(),
-        unitPrice: s.number(),
+    tenantId: v.string(),
+    userId: v.string(), // client user ID
+    appointmentId: v.id("appointments"),
+    assessmentId: v.optional(v.id("assessments")),
+    amount: v.number(),
+    status: v.string(), // "draft", "sent", "paid", "overdue"
+    dueDate: v.number(), // timestamp
+    items: v.array(
+      v.object({
+        description: v.string(),
+        quantity: v.number(),
+        unitPrice: v.number(),
       }),
     ),
-    userId: s.string(), // User who the invoice is for
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
+    createdAt: v.number(),
+  }),
+
+  // For storing pricing settings history
+  pricingLogs: defineTable({
+    tenantId: v.string(),
+    updatedBy: v.string(), // userId who made the change
+    serviceRates: v.array(
+      v.object({
+        name: v.string(),
+        rate: v.number(),
+      }),
+    ),
+    laborRate: v.number(),
+    partsMarkup: v.number(), // percentage
+    createdAt: v.number(),
+  }),
+
+  // For member notifications
+  notifications: defineTable({
+    tenantId: v.string(),
+    userId: v.string(), // staff member ID
+    title: v.string(),
+    message: v.string(),
+    type: v.string(), // "appointment", "assessment", "invoice", "system"
+    relatedId: v.optional(v.id("appointments")), // ID of related item
+    isRead: v.boolean(),
+    createdAt: v.number(),
+  }),
+
+  // AI Agent related tables
+  media: defineTable({
+    tenantId: v.string(),
+    assessmentId: v.id("assessments"),
+    url: v.string(),
+    type: v.string(), // "image", "video"
+    metadata: v.optional(v.object({})),
+    createdAt: v.number(),
+  }).index("by_assessment", ["assessmentId", "tenantId"]),
+
+  mediaAnalysis: defineTable({
+    tenantId: v.string(),
+    mediaId: v.id("media"),
+    analysisType: v.string(), // "damage", "part", "condition"
+    results: v.object({}),
+    embedding: v.array(v.float64()),
+    createdAt: v.number(),
+  }),
+
+  slots: defineTable({
+    tenantId: v.string(),
+    start: v.number(), // timestamp
+    end: v.number(), // timestamp
+    available: v.boolean(),
+    createdAt: v.number(),
+  }),
+
+  businessInsights: defineTable({
+    tenantId: v.string(),
+    type: v.string(), // "revenue", "customer", "service"
+    period: v.string(), // "daily", "weekly", "monthly", "quarterly", "yearly", "event"
+    startDate: v.number(), // timestamp
+    endDate: v.number(), // timestamp
+    data: v.object({}),
+    createdAt: v.number(),
+  }),
+
+  agentMemory: defineTable({
+    tenantId: v.string(),
+    agentName: v.string(),
+    content: v.string(),
+    embedding: v.optional(v.array(v.float64())),
+    timestamp: v.number(),
+  }).vectorIndex("by_embedding", {
+    vectorField: "embedding",
+    dimensions: 1536,
+    filterFields: ["tenantId", "agentName"],
+  }),
+
+  agentTrajectories: defineTable({
+    tenantId: v.string(),
+    agentName: v.string(),
+    contextId: v.string(),
+    steps: v.array(v.object({})),
+    feedback: v.optional(v.object({})),
+    createdAt: v.number(),
   }),
 })

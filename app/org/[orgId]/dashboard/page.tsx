@@ -1,85 +1,125 @@
-import { auth, currentUser } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
-import Header from "@/components/header"
+"use client"
 
-export default async function OrgDashboardPage({
+import { useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { Authenticated, Unauthenticated, AuthLoading } from "convex/react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { usePermissions } from "@/hooks/use-permissions"
+import { Car, Calendar, FileText } from "lucide-react"
+
+export default function DashboardPage({
   params,
 }: {
   params: { orgId: string }
 }) {
-  const { userId, orgId } = auth()
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Dashboard</h1>
 
-  if (!userId || !orgId) {
-    redirect("/sign-in")
+      <AuthLoading>
+        <div className="flex justify-center py-8">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        </div>
+      </AuthLoading>
+
+      <Authenticated>
+        <DashboardContent orgId={params.orgId} />
+      </Authenticated>
+
+      <Unauthenticated>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <h2 className="text-xl font-bold text-red-700">Authentication Required</h2>
+          <p className="mt-2 text-red-600">Please sign in to view this dashboard.</p>
+        </div>
+      </Unauthenticated>
+    </div>
+  )
+}
+
+function DashboardContent({ orgId }: { orgId: string }) {
+  const { isAdmin } = usePermissions()
+  const clientOverview = useQuery(api.queries.getClientOverview)
+  const adminOverview = useQuery(api.queries.getAdminOverview)
+
+  if (clientOverview === undefined || (isAdmin && adminOverview === undefined)) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    )
   }
-
-  // Ensure the user is accessing the correct organization
-  if (orgId !== params.orgId) {
-    redirect(`/org/${orgId}/dashboard`)
-  }
-
-  const user = await currentUser()
-
-  // Since we can't use clerkClient directly, we'll use the user data we have
-  // In a real app, you might fetch organization details from your database
-  const organizationName =
-    user?.organizationMemberships.find((membership) => membership.organization.id === orgId)?.organization.name ||
-    "Organization"
 
   return (
-    <div>
-      <Header />
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="mb-6 text-3xl font-bold">{organizationName} Dashboard</h1>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vehicles</CardTitle>
+            <Car className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clientOverview.vehicleCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Appointments</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clientOverview.appointmentCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Invoices</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clientOverview.invoiceCount}</div>
+          </CardContent>
+        </Card>
+      </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">Organization Details</h2>
-            <div className="space-y-2">
-              <p>
-                <span className="font-medium">Name:</span> {organizationName}
-              </p>
-              <p>
-                <span className="font-medium">ID:</span> {orgId}
-              </p>
-              <p>
-                <span className="font-medium">Created:</span> {new Date().toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">Your Role</h2>
-            <div className="space-y-2">
-              <p>
-                <span className="font-medium">Name:</span> {user?.firstName} {user?.lastName}
-              </p>
-              <p>
-                <span className="font-medium">Email:</span> {user?.emailAddresses[0].emailAddress}
-              </p>
-              <p>
-                <span className="font-medium">Role:</span>{" "}
-                {user?.organizationMemberships.find((m) => m.organization.id === orgId)?.role || "Member"}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">Quick Links</h2>
-            <div className="space-y-2">
-              <a href={`/org/${orgId}/settings`} className="block text-primary hover:underline">
-                Organization Settings
-              </a>
-              <a href={`/org/${orgId}/members`} className="block text-primary hover:underline">
-                Manage Members
-              </a>
-              <a href={`/org/${orgId}/billing`} className="block text-primary hover:underline">
-                Billing & Subscription
-              </a>
-            </div>
+      {isAdmin && adminOverview && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">Organization Overview</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Vehicles</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{adminOverview.vehicleCount}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Appointments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{adminOverview.appointmentCount}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{adminOverview.invoiceCount}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{adminOverview.totalUsers}</div>
+              </CardContent>
+            </Card>
           </div>
         </div>
-      </main>
+      )}
     </div>
   )
 }

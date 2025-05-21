@@ -1,28 +1,7 @@
 import { mutation } from "./_generated/server"
 import { v } from "convex/values"
-
-// Create a new user
-export const createUser = mutation({
-  args: {
-    clerkId: v.string(),
-    email: v.string(),
-    firstName: v.string(),
-    lastName: v.string(),
-    imageUrl: v.optional(v.string()),
-    role: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("users", {
-      clerkId: args.clerkId,
-      email: args.email,
-      firstName: args.firstName,
-      lastName: args.lastName,
-      imageUrl: args.imageUrl,
-      role: args.role,
-      createdAt: Date.now(),
-    })
-  },
-})
+import { getAuthenticatedUser, hasPermission } from "./lib/auth"
+import { ConvexError } from "convex/values"
 
 // Create a new vehicle
 export const createVehicle = mutation({
@@ -34,13 +13,12 @@ export const createVehicle = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    if (!identity) {
-      throw new Error("Not authenticated")
+    // Check if user has permission to create vehicles
+    if (!hasPermission(orgPermissions, "org:vehicles:write")) {
+      throw new ConvexError("Permission denied: Cannot create vehicles")
     }
-
-    const userId = identity.subject
-    const orgId = identity.tokenIdentifier.split("|")[1]
 
     return await ctx.db.insert("vehicles", {
       make: args.make,
@@ -61,13 +39,7 @@ export const createTestRecord = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
-
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    const userId = identity.subject
-    const orgId = identity.tokenIdentifier.split("|")[1]
+    const { userId, orgId } = getAuthenticatedUser(identity)
 
     return await ctx.db.insert("testRecords", {
       message: args.message,
@@ -87,18 +59,17 @@ export const createAssessment = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions } = getAuthenticatedUser(identity)
 
-    if (!identity) {
-      throw new Error("Not authenticated")
+    // Check if user has permission to create assessments
+    if (!hasPermission(orgPermissions, "org:assessments:write")) {
+      throw new ConvexError("Permission denied: Cannot create assessments")
     }
-
-    const userId = identity.subject
-    const orgId = identity.tokenIdentifier.split("|")[1]
 
     // Verify the vehicle belongs to this tenant
     const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle || vehicle.tenantId !== orgId) {
-      throw new Error("Vehicle not found or access denied")
+      throw new ConvexError("Vehicle not found or access denied")
     }
 
     return await ctx.db.insert("assessments", {
@@ -113,98 +84,45 @@ export const createAssessment = mutation({
   },
 })
 
-// Update a user
-export const updateUser = mutation({
+// Create an appointment
+export const createAppointment = mutation({
   args: {
-    clerkId: v.string(),
-    email: v.optional(v.string()),
-    firstName: v.optional(v.string()),
-    lastName: v.optional(v.string()),
-    imageUrl: v.optional(v.string()),
+    vehicleId: v.id("vehicles"),
+    date: v.number(),
+    serviceType: v.string(),
+    assessmentId: v.optional(v.id("assessments")),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
-      .first()
+    const identity = await ctx.auth.getUserIdentity()
+    const { userId, orgId, orgPermissions, userType } = getAuthenticatedUser(identity)
 
-    if (!user) {
-      throw new Error("User not found")
+    // Check if user has permission to create appointments
+    if (!hasPermission(orgPermissions, "org:appointments:write")) {
+      throw new ConvexError("Permission denied: Cannot create appointments")
     }
 
-    const updates: any = {}
-    if (args.email !== undefined) updates.email = args.email
-    if (args.firstName !== undefined) updates.firstName = args.firstName
-    if (args.lastName !== undefined) updates.lastName = args.lastName
-    if (args.imageUrl !== undefined) updates.imageUrl = args.imageUrl
-
-    return await ctx.db.patch(user._id, updates)
-  },
-})
-
-// Mark a user as deleted
-export const markUserDeleted = mutation({
-  args: {
-    clerkId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
-      .first()
-
-    if (!user) {
-      throw new Error("User not found")
+    // Verify the vehicle belongs to this tenant
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle || vehicle.tenantId !== orgId) {
+      throw new ConvexError("Vehicle not found or access denied")
     }
 
-    // Instead of actually deleting, mark as deleted
-    return await ctx.db.patch(user._id, {
-      isDeleted: true,
-      deletedAt: Date.now(),
-    })
-  },
-})
-
-// Create a tenant (organization)
-export const createTenant = mutation({
-  args: {
-    clerkOrgId: v.string(),
-    name: v.string(),
-    slug: v.string(),
-    imageUrl: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("tenants", {
-      clerkOrgId: args.clerkOrgId,
-      name: args.name,
-      slug: args.slug,
-      imageUrl: args.imageUrl,
-      createdAt: Date.now(),
-    })
-  },
-})
-
-// Add a user to a tenant
-export const addUserToTenant = mutation({
-  args: {
-    clerkUserId: v.string(),
-    clerkOrgId: v.string(),
-    role: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("clerkId"), args.clerkUserId))
-      .first()
-
-    if (!user) {
-      throw new Error("User not found")
+    // If assessment ID is provided, verify it belongs to this tenant
+    if (args.assessmentId) {
+      const assessment = await ctx.db.get(args.assessmentId)
+      if (!assessment || assessment.tenantId !== orgId) {
+        throw new ConvexError("Assessment not found or access denied")
+      }
     }
 
-    return await ctx.db.insert("userTenants", {
-      userId: user._id,
-      tenantId: args.clerkOrgId,
-      role: args.role,
+    return await ctx.db.insert("appointments", {
+      vehicleId: args.vehicleId,
+      assessmentId: args.assessmentId,
+      date: args.date,
+      status: "scheduled",
+      serviceType: args.serviceType,
+      userId,
+      tenantId: orgId,
       createdAt: Date.now(),
     })
   },
