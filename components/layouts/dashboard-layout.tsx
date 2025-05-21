@@ -2,13 +2,14 @@
 
 import type { ReactNode } from "react"
 import { useMobile } from "@/hooks/use-mobile"
+import { MobileNav } from "@/components/ui/mobile-nav"
 
 interface DashboardLayoutProps {
   children: ReactNode
   sidebar: ReactNode
 }
 
-export function DashboardLayout({ children, sidebar }: DashboardLayoutProps) {
+export function DashboardLayout({ children, sidebar, orgId }: DashboardLayoutProps & { orgId: string }) {
   const { isMobile } = useMobile()
 
   return (
@@ -19,9 +20,12 @@ export function DashboardLayout({ children, sidebar }: DashboardLayoutProps) {
 
         {/* Main content */}
         <div className="flex-1 overflow-auto">
-          <main className="container mx-auto p-4 md:p-6 pb-16">{children}</main>
+          <main className="container mx-auto p-4 md:p-6 pb-20">{children}</main>
         </div>
       </div>
+
+      {/* Mobile navigation */}
+      <MobileNav orgId={orgId} />
     </div>
   )
 }
