@@ -8,9 +8,27 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { ErrorAlert } from "@/components/ui/error-alert"
+import { useToast } from "@/components/ui/use-toast"
+import { RefreshCw } from "lucide-react"
 
-export function ConfigureRules() {
-  const tenant = useQuery(query("getTenantSettings")) || null
+interface ConfigureRulesProps {
+  onError?: (error: Error) => void
+}
+
+export function ConfigureRules({ onError }: ConfigureRulesProps) {
+  const { toast } = useToast()
+  const [queryError, setQueryError] = useState<Error | null>(null)
+  const [mutationError, setMutationError] = useState<Error | null>(null)
+  const tenant =
+    useQuery(query("getTenantSettings"), {
+      onError: (error) => {
+        console.error("Failed to fetch tenant settings:", error)
+        setQueryError(error)
+        if (onError) onError(error)
+      },
+    }) || null
+
   const [requireDeposit, setRequireDeposit] = useState(false)
   const [depositPercentage, setDepositPercentage] = useState(20)
   const [urgencyFeeMultiplier, setUrgencyFeeMultiplier] = useState(1.5)
@@ -31,6 +49,7 @@ export function ConfigureRules() {
 
   const handleSave = async () => {
     setIsSubmitting(true)
+    setMutationError(null)
 
     try {
       await updateRules({
@@ -41,15 +60,51 @@ export function ConfigureRules() {
       })
 
       queryClient.invalidateQueries(["getTenantSettings"])
+
+      toast({
+        title: "Business rules updated",
+        description: "Your business rules have been saved successfully.",
+      })
     } catch (error) {
       console.error("Failed to update rules:", error)
+      const typedError = error instanceof Error ? error : new Error("Failed to update business rules")
+      setMutationError(typedError)
+      if (onError) onError(typedError)
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  if (queryError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Business Rules</CardTitle>
+          <CardDescription>Configure payment and booking policies</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ErrorAlert title="Failed to load business rules" error={queryError} />
+          <Button onClick={() => queryClient.invalidateQueries(["getTenantSettings"])} className="mt-4">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (!tenant) {
-    return <LoadingSpinner />
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Business Rules</CardTitle>
+          <CardDescription>Configure payment and booking policies</CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center py-6">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -59,6 +114,8 @@ export function ConfigureRules() {
         <CardDescription>Configure payment and booking policies</CardDescription>
       </CardHeader>
       <CardContent>
+        {mutationError && <ErrorAlert title="Failed to update business rules" error={mutationError} className="mb-4" />}
+
         <div className="space-y-6 max-w-md">
           <div className="flex items-center justify-between">
             <div>

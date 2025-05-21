@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useClerk } from "@clerk/nextjs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useParams } from "next/navigation"
+import { ErrorAlert } from "@/components/ui/error-alert"
+import { useToast } from "@/components/ui/use-toast"
 
 interface User {
   id: string
@@ -18,7 +20,13 @@ interface User {
   role: string
 }
 
-export function EditUser({ user }: { user: User }) {
+interface EditUserProps {
+  user: User
+  onError?: (error: Error) => void
+}
+
+export function EditUser({ user, onError }: EditUserProps) {
+  const { toast } = useToast()
   const params = useParams()
   const orgId = params.orgId as string
   const { client: clerkClient } = useClerk()
@@ -27,12 +35,14 @@ export function EditUser({ user }: { user: User }) {
   const [lastName, setLastName] = useState(user.lastName)
   const [role, setRole] = useState(user.role as "org:admin" | "org:member" | "org:client")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
 
   const queryClient = useQueryClient()
   const updateUserRecord = useMutation(mutation("updateUser"))
 
   const handleSave = async () => {
     setIsSubmitting(true)
+    setError(null)
 
     try {
       // 1. Update user via Clerk
@@ -64,8 +74,16 @@ export function EditUser({ user }: { user: User }) {
       // 4. Close dialog and invalidate queries
       setIsOpen(false)
       queryClient.invalidateQueries(["listUsers"])
+
+      // 5. Show success toast
+      toast({
+        title: "User updated successfully",
+        description: `${firstName} ${lastName}'s information has been updated`,
+      })
     } catch (error) {
       console.error("Failed to update user:", error)
+      setError(error instanceof Error ? error : new Error("Failed to update user"))
+      if (onError) onError(error instanceof Error ? error : new Error("Failed to update user"))
     } finally {
       setIsSubmitting(false)
     }
@@ -84,6 +102,8 @@ export function EditUser({ user }: { user: User }) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {error && <ErrorAlert title="Failed to update user" error={error} />}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium mb-1 block">First Name</label>

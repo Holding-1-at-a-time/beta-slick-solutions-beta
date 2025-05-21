@@ -7,9 +7,27 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { ErrorAlert } from "@/components/ui/error-alert"
+import { useToast } from "@/components/ui/use-toast"
+import { RefreshCw } from "lucide-react"
 
-export function UpdateBranding() {
-  const tenant = useQuery(query("getTenantSettings")) || null
+interface UpdateBrandingProps {
+  onError?: (error: Error) => void
+}
+
+export function UpdateBranding({ onError }: UpdateBrandingProps) {
+  const { toast } = useToast()
+  const [queryError, setQueryError] = useState<Error | null>(null)
+  const [mutationError, setMutationError] = useState<Error | null>(null)
+  const tenant =
+    useQuery(query("getTenantSettings"), {
+      onError: (error) => {
+        console.error("Failed to fetch tenant settings:", error)
+        setQueryError(error)
+        if (onError) onError(error)
+      },
+    }) || null
+
   const [logoUrl, setLogoUrl] = useState("")
   const [primaryColor, setPrimaryColor] = useState("#00AE98")
   const [secondaryColor, setSecondaryColor] = useState("#707070")
@@ -28,6 +46,7 @@ export function UpdateBranding() {
 
   const handleSave = async () => {
     setIsSubmitting(true)
+    setMutationError(null)
 
     try {
       await updateBranding({
@@ -39,15 +58,51 @@ export function UpdateBranding() {
       })
 
       queryClient.invalidateQueries(["getTenantSettings"])
+
+      toast({
+        title: "Branding updated",
+        description: "Your branding settings have been saved successfully.",
+      })
     } catch (error) {
       console.error("Failed to update branding:", error)
+      const typedError = error instanceof Error ? error : new Error("Failed to update branding")
+      setMutationError(typedError)
+      if (onError) onError(typedError)
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  if (queryError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Update Branding</CardTitle>
+          <CardDescription>Customize your organization's visual identity</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ErrorAlert title="Failed to load branding settings" error={queryError} />
+          <Button onClick={() => queryClient.invalidateQueries(["getTenantSettings"])} className="mt-4">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (!tenant) {
-    return <LoadingSpinner />
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Update Branding</CardTitle>
+          <CardDescription>Customize your organization's visual identity</CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center py-6">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -57,6 +112,8 @@ export function UpdateBranding() {
         <CardDescription>Customize your organization's visual identity</CardDescription>
       </CardHeader>
       <CardContent>
+        {mutationError && <ErrorAlert title="Failed to update branding" error={mutationError} className="mb-4" />}
+
         <div className="space-y-4 max-w-md">
           <div>
             <label className="text-sm font-medium mb-1 block">Logo URL</label>
@@ -67,7 +124,15 @@ export function UpdateBranding() {
             />
             {logoUrl && (
               <div className="mt-2 p-4 border rounded flex justify-center">
-                <img src={logoUrl || "/placeholder.svg"} alt="Logo Preview" className="max-h-20 object-contain" />
+                <img
+                  src={logoUrl || "/placeholder.svg"}
+                  alt="Logo Preview"
+                  className="max-h-20 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = "/placeholder.svg"
+                    e.currentTarget.alt = "Failed to load image"
+                  }}
+                />
               </div>
             )}
           </div>
