@@ -7,59 +7,84 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export function ServiceItemForm({
+interface ServiceItem {
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
+export default function ServiceItemForm({
   onAdd,
 }: {
-  onAdd: (item: { description: string; price: number }) => void
+  onAdd: (item: ServiceItem) => void
 }) {
   const [description, setDescription] = useState("")
-  const [price, setPrice] = useState<string>("")
+  const [quantity, setQuantity] = useState<number>(1)
+  const [unitPrice, setUnitPrice] = useState<number>(0)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!description || !price) return
+
+    if (!description || quantity <= 0 || unitPrice <= 0) return
 
     onAdd({
       description,
-      price: Number.parseFloat(price),
+      quantity,
+      unitPrice,
     })
 
+    // Reset form
     setDescription("")
-    setPrice("")
+    setQuantity(1)
+    setUnitPrice(0)
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="description">Service Description</Label>
+        <div>
+          <Label htmlFor="description">Description</Label>
           <Input
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Oil change, brake service, etc."
+            placeholder="Service description"
             required
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="price">Price ($)</Label>
-          <Input
-            id="price"
-            type="number"
-            step="0.01"
-            min="0"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="0.00"
-            required
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="quantity">Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              min="1"
+              step="1"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="unitPrice">Unit Price ($)</Label>
+            <Input
+              id="unitPrice"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(Number(e.target.value))}
+              required
+            />
+          </div>
         </div>
       </div>
 
-      <Button type="submit" variant="outline">
-        Add Service Item
-      </Button>
+      <div className="flex justify-end">
+        <Button type="submit">Add Item</Button>
+      </div>
     </form>
   )
 }

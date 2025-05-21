@@ -1,30 +1,31 @@
 "use client"
 
 import { useState } from "react"
-import { useMutation, useQueryClient } from "convex/react"
-import { mutation } from "@/convex/_generated/api"
-import { ServiceItemForm } from "./service-item-form"
-import { useUser } from "@clerk/nextjs"
+import { useFinalizeInvoice } from "@/hooks/useMember"
+import ServiceItemForm from "./service-item-form"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
+import type { Id } from "@/convex/_generated/dataModel"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
 
-export function FinalizeInvoice({
-  orgId,
+interface ServiceItem {
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
+export default function FinalizeInvoice({
   appointmentId,
 }: {
-  orgId: string
-  appointmentId: string
+  appointmentId: Id<"appointments">
 }) {
   const router = useRouter()
-  const { user } = useUser()
-  const userId = user?.id || ""
-  const [items, setItems] = useState<Array<{ description: string; price: number }>>([])
-  const queryClient = useQueryClient()
-  const finalizeMutation = useMutation(mutation("finalizeInvoice"))
+  const [items, setItems] = useState<ServiceItem[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const finalizeInvoice = useFinalizeInvoice()
 
-  const handleAddItem = (item: { description: string; price: number }) => {
+  const handleAddItem = (item: ServiceItem) => {
     setItems((prev) => [...prev, item])
   }
 
@@ -32,87 +33,98 @@ export function FinalizeInvoice({
     setItems((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const calculateTotal = () => {
+    return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+  }
+
   const handleSubmit = async () => {
-    if (!items.length) {
+    if (items.length === 0) {
       toast({
         title: "No items added",
-        description: "Please add at least one service item to finalize the invoice.",
+        description: "Please add at least one service item before finalizing.",
         variant: "destructive",
       })
       return
     }
 
+    setIsSubmitting(true)
     try {
-      await finalizeMutation(orgId, appointmentId, items)
-      // Invalidate both "today's appointments" and outstanding invoices
-      queryClient.invalidateQueries(["listTodayAppointments", orgId, userId])
-      queryClient.invalidateQueries(["listInvoices", orgId, userId])
-
+      await finalizeInvoice(appointmentId, items)
       toast({
-        title: "Invoice finalized",
-        description: "The invoice has been successfully created and sent to the customer.",
+        title: "Invoice created",
+        description: "The invoice has been created successfully.",
       })
-
-      router.push(`/${orgId}/dashboard/member`)
+      router.push("../appointments")
     } catch (error) {
       toast({
-        title: "Error finalizing invoice",
-        description: "There was an error creating the invoice. Please try again.",
+        title: "Error creating invoice",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Finalize Invoice</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ServiceItemForm onAdd={handleAddItem} />
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">Finalize Invoice</h2>
 
-        {items.length > 0 && (
-          <div className="mt-6">
-            <h3 className="font-medium mb-2">Service Items</h3>
-            <div className="border rounded-md overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="p-2 text-left">Description</th>
-                    <th className="p-2 text-right">Price</th>
-                    <th className="p-2 w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={index} className="border-t">
-                      <td className="p-2">{item.description}</td>
-                      <td className="p-2 text-right">${item.price.toFixed(2)}</td>
-                      <td className="p-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(index)}>
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t bg-muted">
-                    <td className="p-2 font-medium">Total</td>
-                    <td className="p-2 text-right font-medium">
-                      ${items.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
+      <Card className="p-6">
+        <h3 className="text-lg font-medium mb-4">Add Service Items</h3>
+        <ServiceItemForm onAdd={handleAddItem} />
+      </Card>
+
+      <Card className="p-6">
+        <h3 className="text-lg font-medium mb-4">Service Items</h3>
+        {items.length === 0 ? (
+          <p className="text-gray-500">No items added yet.</p>
+        ) : (
+          <div className="space-y-4">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left pb-2">Description</th>
+                  <th className="text-right pb-2">Quantity</th>
+                  <th className="text-right pb-2">Unit Price</th>
+                  <th className="text-right pb-2">Total</th>
+                  <th className="pb-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr key={index} className="border-b">
+                    <td className="py-2">{item.description}</td>
+                    <td className="text-right py-2">{item.quantity}</td>
+                    <td className="text-right py-2">${item.unitPrice.toFixed(2)}</td>
+                    <td className="text-right py-2">${(item.quantity * item.unitPrice).toFixed(2)}</td>
+                    <td className="text-right py-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(index)}>
+                        Remove
+                      </Button>
                     </td>
-                    <td></td>
                   </tr>
-                </tbody>
-              </table>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3} className="text-right font-medium pt-2">
+                    Total:
+                  </td>
+                  <td className="text-right font-medium pt-2">${calculateTotal().toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="flex justify-end mt-4">
+              <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-green-600 hover:bg-green-700">
+                {isSubmitting ? "Finalizing..." : "Finalize Invoice"}
+              </Button>
             </div>
           </div>
         )}
-      </CardContent>
-      <CardFooter>
-        <Button onClick={handleSubmit} className="ml-auto">
-          Finalize and Send Invoice
-        </Button>
-      </CardFooter>
-    </Card>
+      </Card>
+    </div>
   )
 }

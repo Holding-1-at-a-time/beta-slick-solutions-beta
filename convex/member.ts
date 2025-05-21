@@ -1,108 +1,175 @@
-import { query, mutation } from "convex/server"
+import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 
-// List all "today's" (UTC day) appointments assigned to the staff member
-export const listTodayAppointments = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-  },
+// Helper function to ensure tenant isolation
+const ensureTenant = async (ctx: any, tenantId: string) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Not authenticated")
+
+  // Verify the user has access to this tenant
+  const user = await ctx.db
+    .query("users")
+    .filter((q) => q.eq(q.field("clerkId"), identity.subject))
+    .first()
+
+  if (!user || !user.tenantId) throw new Error("User not found")
+
+  // Ensure tenant isolation
+  if (user.tenantId !== tenantId) throw new Error("Unauthorized access to tenant")
+
+  return { userId: user._id as Id<"users">, user }
+}
+
+// Get today's appointments for a staff member
+export const getTodayAppointments = query({
+  args: { tenantId: v.string() },
   handler: async (ctx, args) => {
-    const { orgId, userId } = args
+    const { userId } = await ensureTenant(ctx, args.tenantId)
 
-    // Compute UTC midnight-to-next-midnight
-    const now = Date.now()
-    const dayStart = new Date(now)
-    dayStart.setUTCHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayStart)
-    dayEnd.setUTCDate(dayStart.getUTCDate() + 1)
+    // Get current date in UTC midnight-to-next-midnight
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
 
     return await ctx.db
       .query("appointments")
       .filter((q) =>
-        q
-          .eq(q.field("tenantId"), orgId)
-          .and(q.eq(q.field("assignedToId"), userId))
-          .and(q.gte(q.field("date"), dayStart.getTime()).and(q.lt(q.field("date"), dayEnd.getTime()))),
+        q.and(
+          q.eq(q.field("tenantId"), args.tenantId),
+          q.eq(q.field("assignedToId"), userId),
+          q.gte(q.field("date"), today.getTime()),
+          q.lt(q.field("date"), tomorrow.getTime()),
+        ),
       )
       .collect()
   },
 })
 
-// Update the status of a given appointment
+// Update appointment status
 export const updateAppointmentStatus = mutation({
   args: {
-    orgId: v.string(),
+    tenantId: v.string(),
     appointmentId: v.id("appointments"),
-    newStatus: v.string(),
+    status: v.string(),
   },
   handler: async (ctx, args) => {
-    const { orgId, appointmentId, newStatus } = args
+    await ensureTenant(ctx, args.tenantId)
 
-    const apt = await ctx.db.get(appointmentId)
-    if (!apt || apt.tenantId !== orgId) {
-      throw new Error("Not authorized to update this appointment")
+    const appointment = await ctx.db.get(args.appointmentId)
+    if (!appointment) throw new Error("Appointment not found")
+
+    // Ensure tenant isolation
+    if (appointment.tenantId !== args.tenantId) {
+      throw new Error("Unauthorized access to appointment")
     }
 
-    await ctx.db.patch(appointmentId, { status: newStatus })
-    return true
+    // Update the status
+    await ctx.db.patch(args.appointmentId, { status: args.status })
+
+    return { success: true }
   },
 })
 
-// List all assessments whose status = "pending"
-export const listPendingAssessments = query({
+// Finalize invoice for an appointment
+export const finalizeInvoice = mutation({
   args: {
-    orgId: v.string(),
-    userId: v.string(),
+    tenantId: v.string(),
+    appointmentId: v.id("appointments"),
+    items: v.array(
+      v.object({
+        description: v.string(),
+        quantity: v.number(),
+        unitPrice: v.number(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
-    const { orgId } = args
+    await ensureTenant(ctx, args.tenantId)
+
+    const appointment = await ctx.db.get(args.appointmentId)
+    if (!appointment) throw new Error("Appointment not found")
+
+    // Ensure tenant isolation
+    if (appointment.tenantId !== args.tenantId) {
+      throw new Error("Unauthorized access to appointment")
+    }
+
+    // Calculate total amount
+    const amount = args.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+
+    // Create invoice
+    const invoiceId = await ctx.db.insert("invoices", {
+      tenantId: args.tenantId,
+      userId: appointment.userId,
+      appointmentId: args.appointmentId,
+      assessmentId: appointment.assessmentId,
+      amount,
+      status: "sent",
+      dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000, // Due in 7 days
+      items: args.items,
+      createdAt: Date.now(),
+    })
+
+    // Update appointment status to completed
+    await ctx.db.patch(args.appointmentId, { status: "completed" })
+
+    return { success: true, invoiceId }
+  },
+})
+
+// Get pending assessments
+export const getPendingAssessments = query({
+  args: { tenantId: v.string() },
+  handler: async (ctx, args) => {
+    await ensureTenant(ctx, args.tenantId)
 
     return await ctx.db
       .query("assessments")
-      .filter((q) => q.eq(q.field("tenantId"), orgId).and(q.eq(q.field("status"), "pending")))
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("status"), "pending")))
       .collect()
   },
 })
 
-// Fetch a single assessment by ID
+// Get assessment details
 export const getAssessment = query({
   args: {
-    orgId: v.string(),
-    userId: v.string(),
+    tenantId: v.string(),
     assessmentId: v.id("assessments"),
   },
   handler: async (ctx, args) => {
-    const { orgId, assessmentId } = args
+    await ensureTenant(ctx, args.tenantId)
 
-    const assessment = await ctx.db.get(assessmentId)
-    if (!assessment || assessment.tenantId !== orgId) return null
+    const assessment = await ctx.db.get(args.assessmentId)
+    if (!assessment) return null
 
-    return assessment
+    // Ensure tenant isolation
+    if (assessment.tenantId !== args.tenantId) {
+      return null
+    }
+
+    // Get vehicle information
+    const vehicle = await ctx.db.get(assessment.vehicleId)
+
+    // Get customer information
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), assessment.userId))
+      .first()
+
+    return {
+      ...assessment,
+      vehicle,
+      customer: user,
+    }
   },
 })
 
-// Get AI suggestions for an assessment (placeholder)
-export const getAISuggestions = query({
-  args: {
-    orgId: v.string(),
-    assessmentId: v.id("assessments"),
-  },
-  handler: async (ctx, args) => {
-    // In a real implementation, this would call an AI service
-    // For now, return placeholder data
-    return [
-      { description: "Front bumper replacement", estimatedCost: 850 },
-      { description: "Headlight alignment", estimatedCost: 120 },
-      { description: "Touch-up paint for hood scratches", estimatedCost: 75 },
-    ]
-  },
-})
-
-// Create an estimate for an assessment
+// Create estimate for assessment
 export const createEstimate = mutation({
   args: {
-    orgId: v.string(),
+    tenantId: v.string(),
     assessmentId: v.id("assessments"),
     serviceItems: v.array(
       v.object({
@@ -112,228 +179,253 @@ export const createEstimate = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const { orgId, assessmentId, serviceItems } = args
+    await ensureTenant(ctx, args.tenantId)
 
-    const assessment = await ctx.db.get(assessmentId)
-    if (!assessment || assessment.tenantId !== orgId) {
-      throw new Error("Not authorized to create estimate for this assessment")
+    const assessment = await ctx.db.get(args.assessmentId)
+    if (!assessment) throw new Error("Assessment not found")
+
+    // Ensure tenant isolation
+    if (assessment.tenantId !== args.tenantId) {
+      throw new Error("Unauthorized access to assessment")
     }
 
-    // Update assessment status
-    await ctx.db.patch(assessmentId, {
+    // Update assessment with estimate and change status
+    await ctx.db.patch(args.assessmentId, {
+      estimate: args.serviceItems,
       status: "estimated",
-      estimatedItems: serviceItems,
-      estimatedTotal: serviceItems.reduce((sum, item) => sum + item.estimatedCost, 0),
-      estimatedAt: Date.now(),
+      updatedAt: Date.now(),
     })
 
-    return true
-  },
-})
-
-// Create an invoice + payment record at the end of an appointment
-export const finalizeInvoice = mutation({
-  args: {
-    orgId: v.string(),
-    appointmentId: v.id("appointments"),
-    serviceItems: v.array(
-      v.object({
-        description: v.string(),
-        price: v.number(),
-      }),
-    ),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, appointmentId, serviceItems } = args
-
-    // We expect that appointment already exists and belongs to this tenant
-    const apt = await ctx.db.get(appointmentId)
-    if (!apt || apt.tenantId !== orgId) {
-      throw new Error("Not authorized to finalize this appointment")
-    }
-
-    // Build invoice items array
-    const items = serviceItems.map((it) => ({
-      description: it.description,
-      quantity: 1,
-      unitPrice: it.price,
-    }))
-
-    const invoiceId = await ctx.db.insert("invoices", {
-      appointmentId,
-      assessmentId: apt.assessmentId ?? null,
-      amount: items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
-      status: "sent", // defaulting to "sent" once finalized
-      dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days from now
-      items,
-      userId: apt.userId, // the client who booked
-      tenantId: orgId,
+    // Create notification for customer
+    await ctx.db.insert("notifications", {
+      tenantId: args.tenantId,
+      userId: assessment.userId,
+      title: "Estimate Ready",
+      message: "Your vehicle assessment estimate is ready for review.",
+      type: "assessment",
+      relatedId: args.assessmentId,
+      isRead: false,
       createdAt: Date.now(),
     })
 
-    // Update appointment status
-    await ctx.db.patch(appointmentId, {
-      status: "invoiced",
-      invoiceId,
-    })
-
-    return true
+    return { success: true }
   },
 })
 
-// List all customers (users with role "client") for this tenant
-export const listCustomers = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-  },
+// Get customers list
+export const getCustomers = query({
+  args: { tenantId: v.string() },
   handler: async (ctx, args) => {
-    const { orgId } = args
+    await ensureTenant(ctx, args.tenantId)
 
-    // Find all userTenants where tenantId = orgId & role = "client"
-    const userTenants = await ctx.db
-      .query("userTenants")
-      .filter((q) => q.eq(q.field("tenantId"), orgId).and(q.eq(q.field("role"), "client")))
+    // Find all users with role "client" for this tenant
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("role"), "client")))
       .collect()
-
-    // Then fetch user record for each userTenant.userId
-    const customers = await Promise.all(
-      userTenants.map(async (ut) => {
-        const user = await ctx.db.get(ut.userId)
-        return user && user.tenantId === orgId ? user : null
-      }),
-    )
-
-    return customers.filter(Boolean)
   },
 })
 
-// Fetch a single customer's user-profile by their userId
+// Get customer details
 export const getCustomer = query({
   args: {
-    orgId: v.string(),
-    userId: v.string(),
+    tenantId: v.string(),
     customerId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const { orgId, customerId } = args
+    await ensureTenant(ctx, args.tenantId)
 
-    const customer = await ctx.db.get(customerId)
+    const customer = await ctx.db.get(args.customerId)
     if (!customer) return null
 
-    // Verify this user belongs to this tenant as a "client"
-    const userTenant = await ctx.db
-      .query("userTenants")
-      .filter((q) =>
-        q
-          .eq(q.field("tenantId"), orgId)
-          .and(q.eq(q.field("userId"), customerId))
-          .and(q.eq(q.field("role"), "client")),
-      )
-      .first()
-
-    return userTenant ? customer : null
-  },
-})
-
-// List vehicles for a given customer
-export const listCustomerVehicles = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-    customerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, customerId } = args
-
-    return await ctx.db
-      .query("vehicles")
-      .filter((q) => q.eq(q.field("tenantId"), orgId).and(q.eq(q.field("userId"), customerId)))
-      .collect()
-  },
-})
-
-// List assessments for a given customer
-export const listCustomerAssessments = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-    customerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, customerId } = args
-
-    return await ctx.db
-      .query("assessments")
-      .filter((q) => q.eq(q.field("tenantId"), orgId).and(q.eq(q.field("userId"), customerId)))
-      .collect()
-  },
-})
-
-// List appointments for a given customer
-export const listCustomerAppointments = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-    customerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, customerId } = args
-
-    return await ctx.db
-      .query("appointments")
-      .filter((q) => q.eq(q.field("tenantId"), orgId).and(q.eq(q.field("userId"), customerId)))
-      .collect()
-  },
-})
-
-// Get the currently logged-in member's own profile
-export const getUserProfile = query({
-  args: {
-    orgId: v.string(),
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const { orgId, userId } = args
-
-    const user = await ctx.db.get(userId)
-    if (!user || user.tenantId !== orgId) {
+    // Ensure tenant isolation
+    if (customer.tenantId !== args.tenantId || customer.role !== "client") {
       return null
     }
 
+    return customer
+  },
+})
+
+// Get customer's vehicles
+export const getCustomerVehicles = query({
+  args: {
+    tenantId: v.string(),
+    customerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await ensureTenant(ctx, args.tenantId)
+
+    return await ctx.db
+      .query("vehicles")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("userId"), args.customerId)))
+      .collect()
+  },
+})
+
+// Get customer's assessments
+export const getCustomerAssessments = query({
+  args: {
+    tenantId: v.string(),
+    customerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await ensureTenant(ctx, args.tenantId)
+
+    return await ctx.db
+      .query("assessments")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("userId"), args.customerId)))
+      .collect()
+  },
+})
+
+// Get customer's appointments
+export const getCustomerAppointments = query({
+  args: {
+    tenantId: v.string(),
+    customerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await ensureTenant(ctx, args.tenantId)
+
+    return await ctx.db
+      .query("appointments")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("userId"), args.customerId)))
+      .collect()
+  },
+})
+
+// Get member profile
+export const getMemberProfile = query({
+  args: { tenantId: v.string() },
+  handler: async (ctx, args) => {
+    const { user } = await ensureTenant(ctx, args.tenantId)
     return user
   },
 })
 
-// Update the authenticated user's own profile
-export const updateUserProfile = mutation({
+// Update member profile
+export const updateMemberProfile = mutation({
   args: {
-    orgId: v.string(),
-    userId: v.string(),
-    data: v.object({
+    tenantId: v.string(),
+    profileData: v.object({
       firstName: v.optional(v.string()),
       lastName: v.optional(v.string()),
       email: v.optional(v.string()),
       phone: v.optional(v.string()),
-      preferences: v.optional(v.any()),
+      imageUrl: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {
-    const { orgId, userId, data } = args
-
-    const user = await ctx.db.get(userId)
-    if (!user || user.tenantId !== orgId) {
-      throw new Error("Not authorized to update this profile")
-    }
+    const { userId } = await ensureTenant(ctx, args.tenantId)
 
     await ctx.db.patch(userId, {
-      ...("firstName" in data ? { firstName: data.firstName } : {}),
-      ...("lastName" in data ? { lastName: data.lastName } : {}),
-      ...("email" in data ? { email: data.email } : {}),
-      ...("phone" in data ? { phone: data.phone } : {}),
-      ...("preferences" in data ? { preferences: data.preferences } : {}),
+      ...args.profileData,
+      updatedAt: Date.now(),
     })
 
-    return true
+    return { success: true }
+  },
+})
+
+// Get member notifications
+export const getMemberNotifications = query({
+  args: { tenantId: v.string() },
+  handler: async (ctx, args) => {
+    const { userId } = await ensureTenant(ctx, args.tenantId)
+
+    return await ctx.db
+      .query("notifications")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.eq(q.field("userId"), userId)))
+      .order("desc")
+      .collect()
+  },
+})
+
+// Mark notification as read
+export const markNotificationRead = mutation({
+  args: {
+    tenantId: v.string(),
+    notificationId: v.id("notifications"),
+  },
+  handler: async (ctx, args) => {
+    await ensureTenant(ctx, args.tenantId)
+
+    const notification = await ctx.db.get(args.notificationId)
+    if (!notification) throw new Error("Notification not found")
+
+    // Ensure tenant isolation
+    if (notification.tenantId !== args.tenantId) {
+      throw new Error("Unauthorized access to notification")
+    }
+
+    await ctx.db.patch(args.notificationId, { isRead: true })
+
+    return { success: true }
+  },
+})
+
+// Get analytics data for member
+export const getMemberAnalytics = query({
+  args: {
+    tenantId: v.string(),
+    period: v.string(), // "day", "week", "month"
+  },
+  handler: async (ctx, args) => {
+    const { userId } = await ensureTenant(ctx, args.tenantId)
+
+    // Calculate date range based on period
+    const now = Date.now()
+    let startDate: number
+
+    switch (args.period) {
+      case "day":
+        startDate = now - 24 * 60 * 60 * 1000 // 1 day ago
+        break
+      case "week":
+        startDate = now - 7 * 24 * 60 * 60 * 1000 // 7 days ago
+        break
+      case "month":
+        startDate = now - 30 * 24 * 60 * 60 * 1000 // 30 days ago
+        break
+      default:
+        startDate = now - 7 * 24 * 60 * 60 * 1000 // Default to week
+    }
+
+    // Get appointments in the period
+    const appointments = await ctx.db
+      .query("appointments")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("tenantId"), args.tenantId),
+          q.eq(q.field("assignedToId"), userId),
+          q.gte(q.field("date"), startDate),
+        ),
+      )
+      .collect()
+
+    // Get completed appointments
+    const completed = appointments.filter((apt) => apt.status === "completed")
+
+    // Calculate completion rate
+    const completionRate = appointments.length > 0 ? (completed.length / appointments.length) * 100 : 0
+
+    // Get invoices related to these appointments
+    const appointmentIds = completed.map((apt) => apt._id)
+    const invoices = await ctx.db
+      .query("invoices")
+      .filter((q) => q.and(q.eq(q.field("tenantId"), args.tenantId), q.in(q.field("appointmentId"), appointmentIds)))
+      .collect()
+
+    // Calculate total revenue
+    const totalRevenue = invoices.reduce((sum, inv) => sum + inv.amount, 0)
+
+    return {
+      totalAppointments: appointments.length,
+      completedAppointments: completed.length,
+      completionRate,
+      totalRevenue,
+      averageInvoice: completed.length > 0 ? totalRevenue / completed.length : 0,
+    }
   },
 })

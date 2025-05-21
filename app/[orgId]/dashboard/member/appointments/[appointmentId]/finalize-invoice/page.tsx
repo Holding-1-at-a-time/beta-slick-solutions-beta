@@ -1,9 +1,14 @@
-import { FinalizeInvoice } from "@/components/member/finalize-invoice"
+import FinalizeInvoice from "@/components/member/finalize-invoice"
+import type { Id } from "@/convex/_generated/dataModel"
 
 export default function FinalizeInvoicePage({
   params,
 }: {
-  params: { orgId: string; appointmentId: string }
+  params: { appointmentId: string }
 }) {
-  return <FinalizeInvoice orgId={params.orgId} appointmentId={params.appointmentId} />
+  return (
+    <div className="p-6">
+      <FinalizeInvoice appointmentId={params.appointmentId as Id<"appointments">} />
+    </div>
+  )
 }

@@ -1,138 +1,143 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useQuery, useMutation, useQueryClient } from "convex/react"
-import { query, mutation } from "@/convex/_generated/api"
-import { useUser } from "@clerk/nextjs"
+import type React from "react"
+
+import { useState } from "react"
+import { useCreateEstimate } from "@/hooks/useMember"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PlusCircle, X } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
+import type { Id } from "@/convex/_generated/dataModel"
 import { useRouter } from "next/navigation"
 
-export function ServiceSelection({
+// Initial suggested services based on AI analysis
+const initialSuggestions = [
+  { description: "Bumper Repair", estimatedCost: 350 },
+  { description: "Hood Repainting", estimatedCost: 200 },
+  { description: "Headlight Replacement", estimatedCost: 180 },
+]
+
+export default function ServiceSelection({
   assessmentId,
-  orgId,
 }: {
-  assessmentId: string
-  orgId: string
+  assessmentId: Id<"assessments">
 }) {
   const router = useRouter()
-  const { user } = useUser()
-  const userId = user?.id || ""
+  const createEstimate = useCreateEstimate()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // In a real implementation, this would fetch AI suggestions
-  const aiSuggested = useQuery(query("getAISuggestions"), orgId, assessmentId) || [
-    { description: "Front bumper replacement", estimatedCost: 850 },
-    { description: "Headlight alignment", estimatedCost: 120 },
-    { description: "Touch-up paint for hood scratches", estimatedCost: 75 },
-  ]
+  // State for service items
+  const [serviceItems, setServiceItems] = useState(initialSuggestions)
 
-  const [items, setItems] = useState<Array<{ description: string; estimatedCost: number }>>(aiSuggested)
-  const queryClient = useQueryClient()
-  const createEstimateMutation = useMutation(mutation("createEstimate"))
+  // Add a new empty service item
+  const addServiceItem = () => {
+    setServiceItems([...serviceItems, { description: "", estimatedCost: 0 }])
+  }
 
-  // Synchronize state when suggestions update
-  useEffect(() => {
-    if (aiSuggested.length > 0) {
-      setItems(aiSuggested)
+  // Remove a service item
+  const removeServiceItem = (index: number) => {
+    setServiceItems(serviceItems.filter((_, i) => i !== index))
+  }
+
+  // Update a service item
+  const updateServiceItem = (index: number, field: string, value: string | number) => {
+    const updatedItems = [...serviceItems]
+    updatedItems[index] = {
+      ...updatedItems[index],
+      [field]: field === "estimatedCost" ? Number(value) : value,
     }
-  }, [aiSuggested])
-
-  const handleChange = (idx: number, field: "description" | "estimatedCost", value: any) => {
-    setItems((prev) => prev.map((i, j) => (j === idx ? { ...i, [field]: value } : i)))
+    setServiceItems(updatedItems)
   }
 
-  const handleRemove = (idx: number) => {
-    setItems((prev) => prev.filter((_, j) => j !== idx))
-  }
+  // Calculate total estimated cost
+  const totalCost = serviceItems.reduce((sum, item) => sum + item.estimatedCost, 0)
 
-  const handleAdd = () => {
-    setItems((prev) => [...prev, { description: "", estimatedCost: 0 }])
-  }
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-  const handleSubmit = async () => {
-    if (!items.length) {
+    // Validate service items
+    const validItems = serviceItems.filter((item) => item.description.trim() !== "" && item.estimatedCost > 0)
+
+    if (validItems.length === 0) {
       toast({
-        title: "No service items",
-        description: "Please add at least one service item to create an estimate.",
+        title: "No valid service items",
+        description: "Please add at least one service item with description and cost.",
         variant: "destructive",
       })
       return
     }
 
-    try {
-      await createEstimateMutation(orgId, assessmentId, items)
-      // Invalidate related queries
-      queryClient.invalidateQueries(["listPendingAssessments", orgId, userId])
+    setIsSubmitting(true)
 
+    try {
+      await createEstimate(assessmentId, validItems)
       toast({
         title: "Estimate created",
-        description: "The estimate has been successfully created and sent to the customer.",
+        description: "The estimate has been sent to the customer.",
       })
-
-      router.push(`/${orgId}/dashboard/member`)
+      router.push("../pending")
     } catch (error) {
       toast({
         title: "Error creating estimate",
-        description: "There was an error creating the estimate. Please try again.",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-medium">Service Items</h3>
-        <Button variant="outline" size="sm" onClick={handleAdd}>
-          Add Item
-        </Button>
-      </div>
-
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-4">
-        {items.map((item, idx) => (
-          <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end border-b pb-4">
-            <div className="md:col-span-7 space-y-2">
-              <Label htmlFor={`description-${idx}`}>Description</Label>
+        {serviceItems.map((item, index) => (
+          <div key={index} className="flex gap-4 items-end">
+            <div className="flex-grow">
+              <Label htmlFor={`description-${index}`}>Service Description</Label>
               <Input
-                id={`description-${idx}`}
+                id={`description-${index}`}
                 value={item.description}
-                onChange={(e) => handleChange(idx, "description", e.target.value)}
-                placeholder="Service description"
+                onChange={(e) => updateServiceItem(index, "description", e.target.value)}
+                placeholder="Enter service description"
+                required
               />
             </div>
-
-            <div className="md:col-span-3 space-y-2">
-              <Label htmlFor={`cost-${idx}`}>Estimated Cost ($)</Label>
+            <div className="w-32">
+              <Label htmlFor={`cost-${index}`}>Cost ($)</Label>
               <Input
-                id={`cost-${idx}`}
+                id={`cost-${index}`}
                 type="number"
-                step="0.01"
                 min="0"
+                step="0.01"
                 value={item.estimatedCost}
-                onChange={(e) => handleChange(idx, "estimatedCost", Number.parseFloat(e.target.value))}
-                placeholder="0.00"
+                onChange={(e) => updateServiceItem(index, "estimatedCost", e.target.value)}
+                required
               />
             </div>
-
-            <div className="md:col-span-2">
-              <Button variant="ghost" size="sm" onClick={() => handleRemove(idx)} className="w-full">
-                Remove
-              </Button>
-            </div>
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeServiceItem(index)}>
+              <X className="h-5 w-5 text-gray-500" />
+            </Button>
           </div>
         ))}
       </div>
 
-      {items.length > 0 && (
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="font-medium">
-            Total Estimate: ${items.reduce((sum, item) => sum + (item.estimatedCost || 0), 0).toFixed(2)}
-          </div>
-          <Button onClick={handleSubmit}>Create Estimate</Button>
-        </div>
-      )}
-    </div>
+      <div className="flex justify-between items-center">
+        <Button type="button" variant="outline" onClick={addServiceItem} className="flex items-center gap-1">
+          <PlusCircle className="h-4 w-4" />
+          <span>Add Service Item</span>
+        </Button>
+
+        <div className="text-lg font-medium">Total: ${totalCost.toFixed(2)}</div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="submit" disabled={isSubmitting} className="bg-green-600 hover:bg-green-700">
+          {isSubmitting ? "Creating Estimate..." : "Create Estimate"}
+        </Button>
+      </div>
+    </form>
   )
 }

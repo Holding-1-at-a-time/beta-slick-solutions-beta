@@ -1,40 +1,38 @@
 "use client"
 
-import { useMutation } from "convex/react"
-import { mutation } from "@/convex/_generated/api"
+import { useUpdateAppointmentStatus } from "@/hooks/useMember"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useQueryClient } from "convex/react"
-import { useUser } from "@clerk/nextjs"
+import type { Id } from "@/convex/_generated/dataModel"
 
-export function UpdateStatus({
+const statusOptions = [
+  { value: "scheduled", label: "Scheduled" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Canceled" },
+]
+
+export default function UpdateStatus({
   appointmentId,
   currentStatus,
-  orgId,
 }: {
-  appointmentId: string
+  appointmentId: Id<"appointments">
   currentStatus: string
-  orgId: string
 }) {
-  const { user } = useUser()
-  const userId = user?.id || ""
-  const queryClient = useQueryClient()
-  const updateStatusMutation = useMutation(mutation("updateAppointmentStatus"))
+  const updateStatus = useUpdateAppointmentStatus()
 
-  const handleStatusChange = async (newStatus: string) => {
-    await updateStatusMutation(orgId, appointmentId, newStatus)
-    // Invalidate to refresh any components depending on this data
-    queryClient.invalidateQueries(["listTodayAppointments", orgId, userId])
+  const handleStatusChange = (newStatus: string) => {
+    updateStatus(appointmentId, newStatus)
   }
 
   return (
     <Select defaultValue={currentStatus} onValueChange={handleStatusChange}>
-      <SelectTrigger className="w-[140px]">
+      <SelectTrigger className="w-[120px]">
         <SelectValue placeholder="Status" />
       </SelectTrigger>
       <SelectContent>
-        {["Scheduled", "In Progress", "Completed", "Cancelled"].map((s) => (
-          <SelectItem key={s} value={s}>
-            {s}
+        {statusOptions.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
           </SelectItem>
         ))}
       </SelectContent>

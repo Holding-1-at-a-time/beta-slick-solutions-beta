@@ -1,46 +1,49 @@
 "use client"
 
-import { useParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MemberAppointments } from "./member-appointments"
-import { PendingAssessments } from "./pending-assessments"
-import { CustomerList } from "./customer-list"
+import { MemberAppointments } from "@/components/member"
+import { PendingAssessments } from "@/components/member"
+import { CustomerList } from "@/components/member"
+import { Card } from "@/components/ui/card"
+import { useMemberNotifications } from "@/hooks/useMember"
 
-export function MemberDashboard() {
-  const params = useParams()
-  const orgId = params.orgId as string
+export default function MemberDashboard() {
+  const { notifications, unreadCount } = useMemberNotifications()
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Member Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Today's Appointments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MemberAppointments orgId={orgId} summary />
-          </CardContent>
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Member Dashboard</h1>
+        <div className="bg-gray-100 px-3 py-1 rounded-full text-sm">{unreadCount} unread notifications</div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Today's Appointments</h2>
+          <MemberAppointments summary />
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Pending Assessments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PendingAssessments orgId={orgId} summary />
-          </CardContent>
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Pending Assessments</h2>
+          <PendingAssessments summary />
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Customer List</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CustomerList orgId={orgId} summary />
-          </CardContent>
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Customers</h2>
+          <CustomerList summary />
         </Card>
       </div>
+
+      <Card className="p-4">
+        <h2 className="text-lg font-semibold mb-4">Recent Notifications</h2>
+        <ul className="divide-y">
+          {notifications.slice(0, 5).map((notification) => (
+            <li key={notification._id} className={`py-3 ${notification.isRead ? "" : "font-medium"}`}>
+              <p className="text-sm">{notification.title}</p>
+              <p className="text-xs text-gray-500">{new Date(notification.createdAt).toLocaleString()}</p>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   )
 }
