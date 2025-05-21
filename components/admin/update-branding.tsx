@@ -1,181 +1,203 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useQuery, useMutation, useQueryClient } from "convex/react"
-import { query, mutation } from "@/convex/_generated/api"
+import type React from "react"
+
+import { useState } from "react"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { ErrorAlert } from "@/components/ui/error-alert"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { RefreshCw } from "lucide-react"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 interface UpdateBrandingProps {
+  tenant?: any
   onError?: (error: Error) => void
 }
 
-export function UpdateBranding({ onError }: UpdateBrandingProps) {
+export function UpdateBranding({ tenant, onError }: UpdateBrandingProps) {
   const { toast } = useToast()
-  const [queryError, setQueryError] = useState<Error | null>(null)
-  const [mutationError, setMutationError] = useState<Error | null>(null)
-  const tenant =
-    useQuery(query("getTenantSettings"), {
-      onError: (error) => {
-        console.error("Failed to fetch tenant settings:", error)
-        setQueryError(error)
-        if (onError) onError(error)
-      },
-    }) || null
+  const updateBranding = useMutation(api.admin.updateBranding)
 
-  const [logoUrl, setLogoUrl] = useState("")
-  const [primaryColor, setPrimaryColor] = useState("#00AE98")
-  const [secondaryColor, setSecondaryColor] = useState("#707070")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
-  const queryClient = useQueryClient()
-  const updateBranding = useMutation(mutation("updateBranding"))
+  const [formData, setFormData] = useState({
+    logoUrl: tenant?.imageUrl || "",
+    colors: {
+      primary: tenant?.branding?.primaryColor || "#00AE98",
+      secondary: tenant?.branding?.secondaryColor || "#707070",
+    },
+  })
 
-  useEffect(() => {
-    if (tenant) {
-      setLogoUrl(tenant.imageUrl || "")
-      setPrimaryColor(tenant.branding?.primaryColor || "#00AE98")
-      setSecondaryColor(tenant.branding?.secondaryColor || "#707070")
-    }
-  }, [tenant])
-
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsSubmitting(true)
-    setMutationError(null)
+    setFormError(null)
 
     try {
-      await updateBranding({
-        logoUrl,
-        colors: {
-          primary: primaryColor,
-          secondary: secondaryColor,
-        },
-      })
-
-      queryClient.invalidateQueries(["getTenantSettings"])
-
+      await updateBranding(formData)
       toast({
         title: "Branding updated",
-        description: "Your branding settings have been saved successfully.",
+        description: "Your branding settings have been updated successfully.",
       })
     } catch (error) {
-      console.error("Failed to update branding:", error)
-      const typedError = error instanceof Error ? error : new Error("Failed to update branding")
-      setMutationError(typedError)
-      if (onError) onError(typedError)
+      const err = error as Error
+      setFormError(err.message)
+      if (onError) {
+        onError(err)
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (queryError) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Update Branding</CardTitle>
-          <CardDescription>Customize your organization's visual identity</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ErrorAlert title="Failed to load branding settings" error={queryError} />
-          <Button onClick={() => queryClient.invalidateQueries(["getTenantSettings"])} className="mt-4">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (!tenant) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Update Branding</CardTitle>
-          <CardDescription>Customize your organization's visual identity</CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center py-6">
-          <LoadingSpinner />
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Update Branding</CardTitle>
-        <CardDescription>Customize your organization's visual identity</CardDescription>
+        <CardTitle>Branding Settings</CardTitle>
+        <CardDescription>Customize your organization's branding and appearance.</CardDescription>
       </CardHeader>
-      <CardContent>
-        {mutationError && <ErrorAlert title="Failed to update branding" error={mutationError} className="mb-4" />}
 
-        <div className="space-y-4 max-w-md">
-          <div>
-            <label className="text-sm font-medium mb-1 block">Logo URL</label>
+      {formError && (
+        <CardContent className="pt-0">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        </CardContent>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="logoUrl">Logo URL</Label>
             <Input
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
+              id="logoUrl"
+              value={formData.logoUrl}
+              onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
               placeholder="https://example.com/logo.png"
+              disabled={isSubmitting}
             />
-            {logoUrl && (
-              <div className="mt-2 p-4 border rounded flex justify-center">
-                <img
-                  src={logoUrl || "/placeholder.svg"}
-                  alt="Logo Preview"
-                  className="max-h-20 object-contain"
-                  onError={(e) => {
-                    e.currentTarget.src = "/placeholder.svg"
-                    e.currentTarget.alt = "Failed to load image"
-                  }}
-                />
-              </div>
-            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Primary Color</label>
-              <div className="flex space-x-2">
-                <Input
-                  type="color"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="w-12 h-10 p-1"
-                />
-                <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#00AE98" />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="primaryColor">Primary Color</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="primaryColor"
+                type="color"
+                value={formData.colors.primary}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    colors: {
+                      ...formData.colors,
+                      primary: e.target.value,
+                    },
+                  })
+                }
+                className="w-12 h-10 p-1"
+                disabled={isSubmitting}
+              />
+              <Input
+                value={formData.colors.primary}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    colors: {
+                      ...formData.colors,
+                      primary: e.target.value,
+                    },
+                  })
+                }
+                className="flex-1"
+                disabled={isSubmitting}
+              />
             </div>
+          </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1 block">Secondary Color</label>
-              <div className="flex space-x-2">
-                <Input
-                  type="color"
-                  value={secondaryColor}
-                  onChange={(e) => setSecondaryColor(e.target.value)}
-                  className="w-12 h-10 p-1"
-                />
-                <Input
-                  value={secondaryColor}
-                  onChange={(e) => setSecondaryColor(e.target.value)}
-                  placeholder="#707070"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="secondaryColor">Secondary Color</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="secondaryColor"
+                type="color"
+                value={formData.colors.secondary}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    colors: {
+                      ...formData.colors,
+                      secondary: e.target.value,
+                    },
+                  })
+                }
+                className="w-12 h-10 p-1"
+                disabled={isSubmitting}
+              />
+              <Input
+                value={formData.colors.secondary}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    colors: {
+                      ...formData.colors,
+                      secondary: e.target.value,
+                    },
+                  })
+                }
+                className="flex-1"
+                disabled={isSubmitting}
+              />
             </div>
           </div>
 
           <div className="pt-4">
-            <Button onClick={handleSave} disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save Branding"}
-            </Button>
+            <div
+              className="p-4 border rounded-md"
+              style={{
+                backgroundColor: formData.colors.primary,
+                color: "#ffffff",
+              }}
+            >
+              <h3 className="text-lg font-bold mb-2">Primary Color Preview</h3>
+              <p>This is how your primary color will look.</p>
+            </div>
           </div>
-        </div>
-      </CardContent>
+
+          <div className="pt-2">
+            <div
+              className="p-4 border rounded-md"
+              style={{
+                backgroundColor: formData.colors.secondary,
+                color: "#ffffff",
+              }}
+            >
+              <h3 className="text-lg font-bold mb-2">Secondary Color Preview</h3>
+              <p>This is how your secondary color will look.</p>
+            </div>
+          </div>
+        </CardContent>
+
+        <CardFooter>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Branding"
+            )}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   )
 }

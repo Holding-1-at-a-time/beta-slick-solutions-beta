@@ -3,15 +3,25 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useMutation, useQueryClient } from "convex/react"
-import { mutation } from "@/convex/_generated/api"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useClerk } from "@clerk/nextjs"
-import { useParams } from "next/navigation"
-import { ErrorAlert } from "@/components/ui/error-alert"
 import { useToast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 interface AddUserProps {
   onError?: (error: Error) => void
@@ -19,84 +29,114 @@ interface AddUserProps {
 
 export function AddUser({ onError }: AddUserProps) {
   const { toast } = useToast()
-  const params = useParams()
-  const orgId = params.orgId as string
-  const { client: clerkClient } = useClerk()
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<"org:admin" | "org:member" | "org:client">("org:client")
+  const createUser = useMutation(api.admin.createUser)
+
+  const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
 
-  const queryClient = useQueryClient()
-  const createUserRecord = useMutation(mutation("createUser"))
+  const [formData, setFormData] = useState({
+    clerkId: "",
+    role: "org:member",
+  })
 
-  const handleInvite = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    setError(null)
+    setFormError(null)
 
     try {
-      // 1. Create invitation via Clerk
-      const invitation = await clerkClient.organizations.createOrganizationInvitation({
-        organizationId: orgId,
-        emailAddress: email,
-        role: role,
-        redirectUrl: `${window.location.origin}/${orgId}/dashboard`,
-      })
-
-      // 2. Create user record in Convex
-      await createUserRecord(invitation.id, role)
-
-      // 3. Reset form and invalidate queries
-      setEmail("")
-      queryClient.invalidateQueries(["listUsers"])
-
-      // 4. Show success toast
+      await createUser(formData)
       toast({
-        title: "User invited successfully",
-        description: `An invitation has been sent to ${email}`,
+        title: "User added successfully",
+        description: "The user has been added to your organization.",
       })
+      setFormData({
+        clerkId: "",
+        role: "org:member",
+      })
+      setOpen(false)
     } catch (error) {
-      console.error("Failed to invite user:", error)
-      setError(error instanceof Error ? error : new Error("Failed to invite user"))
-      if (onError) onError(error instanceof Error ? error : new Error("Failed to invite user"))
+      const err = error as Error
+      setFormError(err.message)
+      if (onError) {
+        onError(err)
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div>
-      <form onSubmit={handleInvite} className="flex flex-wrap gap-3 items-end">
-        <div className="flex-1">
-          <Input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>Add User</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Add User</DialogTitle>
+          <DialogDescription>
+            Add a new user to your organization. The user will receive an invitation email.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="w-40">
-          <Select value={role} onValueChange={(value) => setRole(value as any)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="org:admin">Admin</SelectItem>
-              <SelectItem value="org:member">Member</SelectItem>
-              <SelectItem value="org:client">Client</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {formError && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        )}
 
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Inviting..." : "Invite User"}
-        </Button>
-      </form>
-
-      {error && <ErrorAlert title="Failed to invite user" error={error} />}
-    </div>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="clerkId" className="text-right">
+                User ID
+              </Label>
+              <Input
+                id="clerkId"
+                value={formData.clerkId}
+                onChange={(e) => setFormData({ ...formData, clerkId: e.target.value })}
+                className="col-span-3"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role" className="text-right">
+                Role
+              </Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => setFormData({ ...formData, role: value })}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger className="col-span-3" id="role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="org:admin">Admin</SelectItem>
+                  <SelectItem value="org:member">Member</SelectItem>
+                  <SelectItem value="org:client">Client</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                "Add User"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
