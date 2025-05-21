@@ -13,7 +13,16 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: process.env.NODE_ENV === "development",
 
-  // Optional: Enables automatic instrumentation of Next.js server components
-  // This will capture errors and performance data from your server components
-  integrations: [new Sentry.Integrations.Http({ tracing: true })],
+  // Enable logging integration
+  _experiments: {
+    enableLogs: true,
+  },
+
+  // Add console logging integration and HTTP tracing
+  integrations: [
+    // Send console.log, console.error, and console.warn calls as logs to Sentry
+    Sentry.consoleLoggingIntegration({ levels: ["log", "error", "warn"] }),
+    // Enable HTTP tracing
+    new Sentry.Integrations.Http({ tracing: true }),
+  ],
 })
