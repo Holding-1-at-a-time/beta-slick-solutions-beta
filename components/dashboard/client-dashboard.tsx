@@ -1,106 +1,223 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { api } from "@/convex/_generated/api"
-import { VehicleListSummary } from "@/components/dashboard/vehicle-list-summary"
-import { UpcomingAppointmentsSummary } from "@/components/dashboard/upcoming-appointments-summary"
-import { OutstandingInvoicesSummary } from "@/components/dashboard/outstanding-invoices-summary"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Car, Calendar, FileText } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useInvoices } from "@/hooks/useInvoices"
+import { useNotifications } from "@/hooks/useNotifications"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { formatCurrency } from "@/lib/utils/format-currency"
+import { formatDistanceToNow } from "@/lib/utils/format-date"
+import { Bell, Calendar, Car, CreditCard } from "lucide-react"
+import Link from "next/link"
 
 interface ClientDashboardProps {
   orgId: string
+  userId: string
 }
 
-export function ClientDashboard({ orgId }: ClientDashboardProps) {
-  const dashboardData = useQuery(api.client.getClientDashboardSummary, { orgId })
+export function ClientDashboard({ orgId, userId }: ClientDashboardProps) {
+  const router = useRouter()
+  const { invoices, loading: invoicesLoading } = useInvoices(orgId, userId, { status: "pending" }, 1, 3)
+  const { notifications, loading: notificationsLoading } = useNotifications(orgId, userId)
 
-  if (!dashboardData) {
-    return <DashboardSkeleton />
-  }
-
-  const { vehicles, upcomingAppointments, outstandingInvoices, stats } = dashboardData
+  const unreadNotifications = notifications.filter((n) => !n.read)
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Client Dashboard</h1>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <Link href={`/${orgId}/dashboard/client/notifications`}>
+            <Button variant="outline" className="relative">
+              <Bell className="h-5 w-5" />
+              {unreadNotifications.length > 0 && (
+                <Badge
+                  className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white"
+                  variant="destructive"
+                >
+                  {unreadNotifications.length}
+                </Badge>
+              )}
+            </Button>
+          </Link>
+        </div>
+      </div>
 
-      {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Vehicles</CardTitle>
-            <Car className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-blue-500" /> My Vehicles
+            </CardTitle>
+            <CardDescription>Manage your registered vehicles</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalVehicles}</div>
+            <p className="text-2xl font-bold">3</p>
+            <p className="text-sm text-gray-500">Registered vehicles</p>
           </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(`/${orgId}/dashboard/client/vehicles`)}
+            >
+              View Vehicles
+            </Button>
+          </CardFooter>
         </Card>
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Upcoming Appointments</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-500" /> Appointments
+            </CardTitle>
+            <CardDescription>Upcoming service appointments</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.upcomingAppointments}</div>
+            <p className="text-2xl font-bold">2</p>
+            <p className="text-sm text-gray-500">Upcoming appointments</p>
           </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(`/${orgId}/dashboard/client/appointments`)}
+            >
+              View Appointments
+            </Button>
+          </CardFooter>
         </Card>
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Invoices</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-yellow-500" /> Invoices
+            </CardTitle>
+            <CardDescription>Outstanding payments</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.outstandingInvoices}</div>
+            <p className="text-2xl font-bold">{invoicesLoading ? "..." : invoices.length}</p>
+            <p className="text-sm text-gray-500">Pending invoices</p>
           </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(`/${orgId}/dashboard/client/invoices`)}
+            >
+              View Invoices
+            </Button>
+          </CardFooter>
         </Card>
       </div>
 
-      {/* Summaries */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <VehicleListSummary vehicles={vehicles} orgId={orgId} />
-        <UpcomingAppointmentsSummary appointments={upcomingAppointments} orgId={orgId} />
-        <OutstandingInvoicesSummary invoices={outstandingInvoices} orgId={orgId} />
-      </div>
-    </div>
-  )
-}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Invoices</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {invoicesLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 bg-gray-100 animate-pulse rounded"></div>
+                ))}
+              </div>
+            ) : invoices.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No pending invoices</p>
+            ) : (
+              <div className="space-y-2">
+                {invoices.map((invoice) => (
+                  <Link
+                    key={invoice._id}
+                    href={`/${orgId}/dashboard/client/invoices/${invoice._id}`}
+                    className="block p-3 border rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex justify-between">
+                      <div>
+                        <p className="font-medium">Invoice #{invoice.invoiceNumber}</p>
+                        <p className="text-sm text-gray-500">{invoice.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(invoice.amount)}</p>
+                        <Badge
+                          variant={
+                            invoice.status === "overdue"
+                              ? "destructive"
+                              : invoice.status === "pending"
+                                ? "outline"
+                                : "default"
+                          }
+                        >
+                          {invoice.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(`/${orgId}/dashboard/client/invoices`)}
+            >
+              View All Invoices
+            </Button>
+          </CardFooter>
+        </Card>
 
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Client Dashboard</h1>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Notifications</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {notificationsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 bg-gray-100 animate-pulse rounded"></div>
+                ))}
+              </div>
+            ) : notifications.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No notifications</p>
+            ) : (
+              <div className="space-y-2">
+                {notifications.slice(0, 3).map((notification) => {
+                  const link = notification.entityId
+                    ? `/${orgId}/dashboard/client/notifications/${notification._id}`
+                    : `/${orgId}/dashboard/client/notifications`
 
-      {/* Stats Skeleton */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-5 w-24" />
-              <Skeleton className="h-4 w-4" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-12" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Summaries Skeleton */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[1, 2, 3].map((j) => (
-                <Skeleton key={j} className="h-16 w-full" />
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+                  return (
+                    <Link key={notification._id} href={link} className="block p-3 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-start gap-3">
+                        <Bell className={`h-5 w-5 mt-0.5 ${notification.read ? "text-gray-400" : "text-blue-500"}`} />
+                        <div>
+                          <p className="font-medium">{notification.title}</p>
+                          <div className="flex justify-between">
+                            <p className="text-sm text-gray-500 truncate max-w-[200px]">{notification.message}</p>
+                            <p className="text-xs text-gray-400">{formatDistanceToNow(notification.createdAt)} ago</p>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(`/${orgId}/dashboard/client/notifications`)}
+            >
+              View All Notifications
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   )

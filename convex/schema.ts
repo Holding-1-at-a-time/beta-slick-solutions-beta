@@ -1,96 +1,84 @@
-import { defineSchema, defineTable, s } from "convex/schema"
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
 export default defineSchema({
-  // Users table with tenant isolation
-  users: defineTable({
-    clerkId: s.string(),
-    email: s.string(),
-    firstName: s.string(),
-    lastName: s.string(),
-    imageUrl: s.string().optional(),
-    role: s.string(), // "admin" | "member" | "client"
-    isDeleted: s.boolean().optional(),
-    deletedAt: s.number().optional(),
-    createdAt: s.number(),
-  }),
+  // Existing tables...
 
-  // Tenants table (organizations)
-  tenants: defineTable({
-    clerkOrgId: s.string(),
-    name: s.string(),
-    slug: s.string(),
-    imageUrl: s.string().optional(),
-    createdAt: s.number(),
-  }),
-
-  // User-Tenant relationship table (for many-to-many)
-  userTenants: defineTable({
-    userId: s.id("users"),
-    tenantId: s.string(), // Clerk org ID
-    role: s.string(), // "org:admin" | "org:member" | "org:client"
-    createdAt: s.number(),
-  }),
-
-  // Test records for tenant isolation testing
-  testRecords: defineTable({
-    message: s.string(),
-    userId: s.string(),
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Vehicles table with tenant isolation
-  vehicles: defineTable({
-    make: s.string(),
-    model: s.string(),
-    year: s.number(),
-    licensePlate: s.string().optional(),
-    userId: s.string(), // Owner of the vehicle
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Assessments table with tenant isolation
-  assessments: defineTable({
-    vehicleId: s.id("vehicles"),
-    status: s.string(), // "pending" | "in_progress" | "completed"
-    description: s.string(),
-    images: s.array(s.string()).optional(),
-    userId: s.string(), // User who created the assessment
-    assignedToId: s.string().optional(), // Staff member assigned
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Appointments table with tenant isolation
-  appointments: defineTable({
-    vehicleId: s.id("vehicles"),
-    assessmentId: s.id("assessments").optional(),
-    date: s.number(), // Timestamp
-    status: s.string(), // "scheduled" | "in_progress" | "completed" | "cancelled"
-    serviceType: s.string(),
-    userId: s.string(), // User who booked the appointment
-    assignedToId: s.string().optional(), // Staff member assigned
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
-  }),
-
-  // Invoices table with tenant isolation
+  // New tables for invoices, pricing, and notifications
   invoices: defineTable({
-    appointmentId: s.id("appointments").optional(),
-    assessmentId: s.id("assessments").optional(),
-    amount: s.number(),
-    status: s.string(), // "draft" | "sent" | "paid" | "overdue"
-    dueDate: s.number(), // Timestamp
-    items: s.array(
-      s.object({
-        description: s.string(),
-        quantity: s.number(),
-        unitPrice: s.number(),
-      }),
+    tenantId: v.string(),
+    userId: v.string(),
+    vehicleId: v.optional(v.id("vehicles")),
+    appointmentId: v.optional(v.id("appointments")),
+    invoiceNumber: v.string(),
+    description: v.string(),
+    amount: v.number(),
+    subtotal: v.optional(v.number()),
+    tax: v.optional(v.number()),
+    discount: v.optional(v.number()),
+    status: v.string(), // "pending", "paid", "overdue"
+    dueDate: v.number(),
+    createdAt: v.number(),
+    paidAt: v.optional(v.number()),
+    paymentIntentId: v.optional(v.string()),
+    items: v.optional(
+      v.array(
+        v.object({
+          description: v.string(),
+          quantity: v.number(),
+          unitPrice: v.number(),
+        }),
+      ),
     ),
-    userId: s.string(), // User who the invoice is for
-    tenantId: s.string(), // Maps to Clerk's orgId
-    createdAt: s.number(),
+  }),
+
+  pricingSettings: defineTable({
+    tenantId: v.string(),
+    baseRates: v.record(v.string(), v.number()),
+    laborRate: v.number(),
+    markup: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
+  pricingLogs: defineTable({
+    tenantId: v.string(),
+    userId: v.string(),
+    action: v.string(), // "create", "update"
+    settings: v.object({
+      baseRates: v.record(v.string(), v.number()),
+      laborRate: v.number(),
+      markup: v.number(),
+    }),
+    timestamp: v.number(),
+    aiRoute: v.optional(v.string()),
+    aiParameters: v.optional(v.any()),
+    aiOutput: v.optional(v.any()),
+  }),
+
+  notifications: defineTable({
+    tenantId: v.string(),
+    userId: v.string(),
+    type: v.string(), // "appointment_reminder", "invoice_due", "invoice_overdue", "assessment_complete"
+    title: v.string(),
+    message: v.string(),
+    read: v.boolean(),
+    createdAt: v.number(),
+    readAt: v.optional(v.number()),
+    entityId: v.optional(v.id("any")),
+    entityType: v.optional(v.string()),
+    vehicleId: v.optional(v.id("vehicles")),
+    metadata: v.optional(v.any()),
+  }),
+
+  activities: defineTable({
+    tenantId: v.string(),
+    userId: v.string(),
+    type: v.string(),
+    description: v.string(),
+    entityId: v.id("any"),
+    entityType: v.string(),
+    timestamp: v.number(),
+    metadata: v.optional(v.any()),
   }),
 })

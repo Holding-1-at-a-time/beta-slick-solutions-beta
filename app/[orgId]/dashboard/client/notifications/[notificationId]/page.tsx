@@ -1,9 +1,13 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-import { ClientDashboard } from "@/components/dashboard/client-dashboard"
+import { NotificationDetail } from "@/components/notifications/notification-detail"
 import { ConvexClientProvider } from "@/components/ConvexClientProvider"
 
-export default async function ClientDashboardPage({ params }: { params: { orgId: string } }) {
+export default async function NotificationDetailPage({
+  params,
+}: {
+  params: { orgId: string; notificationId: string }
+}) {
   const user = await currentUser()
 
   if (!user) {
@@ -12,7 +16,7 @@ export default async function ClientDashboardPage({ params }: { params: { orgId:
 
   return (
     <ConvexClientProvider>
-      <ClientDashboard orgId={params.orgId} userId={user.id} />
+      <NotificationDetail orgId={params.orgId} userId={user.id} notificationId={params.notificationId} />
     </ConvexClientProvider>
   )
 }
