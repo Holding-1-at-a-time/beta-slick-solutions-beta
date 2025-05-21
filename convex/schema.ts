@@ -64,4 +64,62 @@ export default defineSchema({
     isRead: v.boolean(),
     createdAt: v.number(),
   }),
+
+  // AI Agent related tables
+  media: defineTable({
+    tenantId: v.string(),
+    assessmentId: v.id("assessments"),
+    url: v.string(),
+    type: v.string(), // "image", "video"
+    metadata: v.optional(v.object({})),
+    createdAt: v.number(),
+  }).index("by_assessment", ["assessmentId", "tenantId"]),
+
+  mediaAnalysis: defineTable({
+    tenantId: v.string(),
+    mediaId: v.id("media"),
+    analysisType: v.string(), // "damage", "part", "condition"
+    results: v.object({}),
+    embedding: v.array(v.float64()),
+    createdAt: v.number(),
+  }),
+
+  slots: defineTable({
+    tenantId: v.string(),
+    start: v.number(), // timestamp
+    end: v.number(), // timestamp
+    available: v.boolean(),
+    createdAt: v.number(),
+  }),
+
+  businessInsights: defineTable({
+    tenantId: v.string(),
+    type: v.string(), // "revenue", "customer", "service"
+    period: v.string(), // "daily", "weekly", "monthly", "quarterly", "yearly", "event"
+    startDate: v.number(), // timestamp
+    endDate: v.number(), // timestamp
+    data: v.object({}),
+    createdAt: v.number(),
+  }),
+
+  agentMemory: defineTable({
+    tenantId: v.string(),
+    agentName: v.string(),
+    content: v.string(),
+    embedding: v.optional(v.array(v.float64())),
+    timestamp: v.number(),
+  }).vectorIndex("by_embedding", {
+    vectorField: "embedding",
+    dimensions: 1536,
+    filterFields: ["tenantId", "agentName"],
+  }),
+
+  agentTrajectories: defineTable({
+    tenantId: v.string(),
+    agentName: v.string(),
+    contextId: v.string(),
+    steps: v.array(v.object({})),
+    feedback: v.optional(v.object({})),
+    createdAt: v.number(),
+  }),
 })
