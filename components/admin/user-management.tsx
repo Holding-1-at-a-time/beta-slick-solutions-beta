@@ -1,102 +1,59 @@
 "use client"
 
-import { useState } from "react"
 import { useQuery } from "convex/react"
 import { query } from "@/convex/_generated/api"
 import { AddUser } from "./add-user"
 import { EditUser } from "./edit-user"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import * as Sentry from "@sentry/nextjs"
+import { useState } from "react"
+import { useToast } from "@/components/ui/use-toast"
 
 export function UserManagement() {
-  const [error, setError] = useState<Error | null>(null)
-  const [isRetrying, setIsRetrying] = useState(false)
+  const { toast } = useToast()
+  const [retryCount, setRetryCount] = useState(0)
 
-  const users = useQuery(query("listUsers"), {
-    onError: (err) => {
-      Sentry.captureException(err, {
-        extra: {
-          component: "UserManagement",
-          action: "listUsers query",
-        },
-      })
-      setError(err)
-    },
-  })
-
-  const isLoading = users === undefined && !error
+  const {
+    results: users,
+    isLoading,
+    isError,
+    error,
+  } = useQuery(query("listUsers")) || {
+    results: [],
+    isLoading: true,
+    isError: false,
+  }
 
   const handleRetry = () => {
-    setIsRetrying(true)
-    setError(null)
-    // Force a refetch by invalidating the query cache
-    setTimeout(() => {
-      setIsRetrying(false)
-    }, 1000)
+    setRetryCount((prev) => prev + 1)
+    toast({
+      title: "Retrying",
+      description: "Attempting to fetch users again...",
+    })
   }
 
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">User Management</h2>
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            Failed to load users: {error.message}
-            <div className="mt-2">
-              <Button variant="outline" size="sm" onClick={handleRetry} disabled={isRetrying}>
-                {isRetrying ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Retrying...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Retry
-                  </>
-                )}
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
+  if (isLoading) {
+    return <LoadingSpinner />
   }
 
-  if (isLoading || isRetrying) {
+  if (isError) {
     return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">User Management</h2>
-        <div className="mb-6">
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <div className="border rounded-md">
-          <div className="p-4 border-b">
-            <div className="flex">
-              <Skeleton className="h-6 w-24 mr-8" />
-              <Skeleton className="h-6 w-32 mr-8" />
-              <Skeleton className="h-6 w-16 mr-8" />
-              <Skeleton className="h-6 w-20" />
-            </div>
+      <Alert variant="destructive" className="mb-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load users: {error?.message || "Unknown error"}
+          <div className="mt-4">
+            <Button onClick={handleRetry} size="sm" variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
           </div>
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="p-4 border-b">
-              <div className="flex">
-                <Skeleton className="h-6 w-32 mr-8" />
-                <Skeleton className="h-6 w-40 mr-8" />
-                <Skeleton className="h-6 w-20 mr-8" />
-                <Skeleton className="h-6 w-24" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        </AlertDescription>
+      </Alert>
     )
   }
 
@@ -106,25 +63,17 @@ export function UserManagement() {
 
       <div className="mb-6">
         <AddUser
-          onError={(err) => {
-            Sentry.captureException(err, {
-              extra: {
-                component: "UserManagement",
-                action: "AddUser",
-              },
+          onError={(message) => {
+            toast({
+              variant: "destructive",
+              title: "Error adding user",
+              description: message,
             })
           }}
         />
       </div>
 
-      {users && users.length === 0 ? (
-        <Alert>
-          <AlertTitle>No users found</AlertTitle>
-          <AlertDescription>
-            No users have been added to this tenant yet. Use the "Add User" button to create your first user.
-          </AlertDescription>
-        </Alert>
-      ) : (
+      {users && users.length > 0 ? (
         <Table>
           <TableHeader>
             <TableRow>
@@ -135,7 +84,7 @@ export function UserManagement() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users?.map((user) => (
+            {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>
                   {user.firstName} {user.lastName}
@@ -145,13 +94,11 @@ export function UserManagement() {
                 <TableCell>
                   <EditUser
                     user={user}
-                    onError={(err) => {
-                      Sentry.captureException(err, {
-                        extra: {
-                          component: "UserManagement",
-                          action: "EditUser",
-                          userId: user.id,
-                        },
+                    onError={(message) => {
+                      toast({
+                        variant: "destructive",
+                        title: "Error updating user",
+                        description: message,
                       })
                     }}
                   />
@@ -160,6 +107,10 @@ export function UserManagement() {
             ))}
           </TableBody>
         </Table>
+      ) : (
+        <div className="text-center p-6 border rounded-md bg-muted/20">
+          <p className="text-muted-foreground">No users found</p>
+        </div>
       )}
     </div>
   )

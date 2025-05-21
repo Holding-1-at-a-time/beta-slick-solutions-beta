@@ -1,203 +1,179 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { useMutation } from "convex/react"
-import { api } from "@/convex/_generated/api"
+import { useState, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "convex/react"
+import { query, mutation } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, RefreshCw } from "lucide-react"
 
 interface UpdateBrandingProps {
-  tenant?: any
-  onError?: (error: Error) => void
+  onError?: (message: string) => void
 }
 
-export function UpdateBranding({ tenant, onError }: UpdateBrandingProps) {
-  const { toast } = useToast()
-  const updateBranding = useMutation(api.admin.updateBranding)
+export function UpdateBranding({ onError }: UpdateBrandingProps) {
+  const {
+    results: tenant,
+    isLoading,
+    isError,
+    error,
+  } = useQuery(query("getTenantSettings")) || {
+    results: null,
+    isLoading: true,
+    isError: false,
+  }
 
+  const [logoUrl, setLogoUrl] = useState("")
+  const [primaryColor, setPrimaryColor] = useState("#00AE98")
+  const [secondaryColor, setSecondaryColor] = useState("#707070")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
-  const [formData, setFormData] = useState({
-    logoUrl: tenant?.imageUrl || "",
-    colors: {
-      primary: tenant?.branding?.primaryColor || "#00AE98",
-      secondary: tenant?.branding?.secondaryColor || "#707070",
-    },
-  })
+  const queryClient = useQueryClient()
+  const updateBranding = useMutation(mutation("updateBranding"))
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (tenant) {
+      setLogoUrl(tenant.imageUrl || "")
+      setPrimaryColor(tenant.branding?.primaryColor || "#00AE98")
+      setSecondaryColor(tenant.branding?.secondaryColor || "#707070")
+    }
+  }, [tenant])
+
+  const handleRetry = () => {
+    setRetryCount((prev) => prev + 1)
+    setLocalError(null)
+  }
+
+  const handleSave = async () => {
     setIsSubmitting(true)
-    setFormError(null)
+    setLocalError(null)
 
     try {
-      await updateBranding(formData)
-      toast({
-        title: "Branding updated",
-        description: "Your branding settings have been updated successfully.",
+      await updateBranding({
+        logoUrl,
+        colors: {
+          primary: primaryColor,
+          secondary: secondaryColor,
+        },
       })
+
+      queryClient.invalidateQueries(["getTenantSettings"])
     } catch (error) {
-      const err = error as Error
-      setFormError(err.message)
+      console.error("Failed to update branding:", error)
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while updating branding"
+
+      setLocalError(errorMessage)
       if (onError) {
-        onError(err)
+        onError(errorMessage)
       }
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Failed to load tenant settings: {error?.message || "Unknown error"}
+          <div className="mt-4">
+            <Button onClick={handleRetry} size="sm" variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Branding Settings</CardTitle>
-        <CardDescription>Customize your organization's branding and appearance.</CardDescription>
+        <CardTitle>Update Branding</CardTitle>
+        <CardDescription>Customize your organization's visual identity</CardDescription>
       </CardHeader>
-
-      {formError && (
-        <CardContent className="pt-0">
-          <Alert variant="destructive">
+      <CardContent>
+        {localError && !onError && (
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{formError}</AlertDescription>
+            <AlertDescription>{localError}</AlertDescription>
           </Alert>
-        </CardContent>
-      )}
+        )}
 
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="logoUrl">Logo URL</Label>
+        <div className="space-y-4 max-w-md">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Logo URL</label>
             <Input
-              id="logoUrl"
-              value={formData.logoUrl}
-              onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://example.com/logo.png"
-              disabled={isSubmitting}
             />
+            {logoUrl && (
+              <div className="mt-2 p-4 border rounded flex justify-center">
+                <img
+                  src={logoUrl || "/placeholder.svg"}
+                  alt="Logo Preview"
+                  className="max-h-20 object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.src = "/placeholder.svg"
+                    setLocalError("Failed to load logo image. Please check the URL.")
+                  }}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="primaryColor">Primary Color</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="primaryColor"
-                type="color"
-                value={formData.colors.primary}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    colors: {
-                      ...formData.colors,
-                      primary: e.target.value,
-                    },
-                  })
-                }
-                className="w-12 h-10 p-1"
-                disabled={isSubmitting}
-              />
-              <Input
-                value={formData.colors.primary}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    colors: {
-                      ...formData.colors,
-                      primary: e.target.value,
-                    },
-                  })
-                }
-                className="flex-1"
-                disabled={isSubmitting}
-              />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Primary Color</label>
+              <div className="flex space-x-2">
+                <Input
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  className="w-12 h-10 p-1"
+                />
+                <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#00AE98" />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="secondaryColor">Secondary Color</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="secondaryColor"
-                type="color"
-                value={formData.colors.secondary}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    colors: {
-                      ...formData.colors,
-                      secondary: e.target.value,
-                    },
-                  })
-                }
-                className="w-12 h-10 p-1"
-                disabled={isSubmitting}
-              />
-              <Input
-                value={formData.colors.secondary}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    colors: {
-                      ...formData.colors,
-                      secondary: e.target.value,
-                    },
-                  })
-                }
-                className="flex-1"
-                disabled={isSubmitting}
-              />
+            <div>
+              <label className="text-sm font-medium mb-1 block">Secondary Color</label>
+              <div className="flex space-x-2">
+                <Input
+                  type="color"
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                  className="w-12 h-10 p-1"
+                />
+                <Input
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                  placeholder="#707070"
+                />
+              </div>
             </div>
           </div>
 
           <div className="pt-4">
-            <div
-              className="p-4 border rounded-md"
-              style={{
-                backgroundColor: formData.colors.primary,
-                color: "#ffffff",
-              }}
-            >
-              <h3 className="text-lg font-bold mb-2">Primary Color Preview</h3>
-              <p>This is how your primary color will look.</p>
-            </div>
+            <Button onClick={handleSave} disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save Branding"}
+            </Button>
           </div>
-
-          <div className="pt-2">
-            <div
-              className="p-4 border rounded-md"
-              style={{
-                backgroundColor: formData.colors.secondary,
-                color: "#ffffff",
-              }}
-            >
-              <h3 className="text-lg font-bold mb-2">Secondary Color Preview</h3>
-              <p>This is how your secondary color will look.</p>
-            </div>
-          </div>
-        </CardContent>
-
-        <CardFooter>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Branding"
-            )}
-          </Button>
-        </CardFooter>
-      </form>
+        </div>
+      </CardContent>
     </Card>
   )
 }
