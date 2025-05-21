@@ -1,7 +1,9 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
-import { db } from "@/lib/convex"
+import { ConvexHttpClient } from "convex/browser"
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
 
 export async function callVisionAPI(assessmentId: string, options: { signal?: AbortSignal } = {}) {
   const { orgId } = auth()
@@ -11,19 +13,13 @@ export async function callVisionAPI(assessmentId: string, options: { signal?: Ab
 
   try {
     // Fetch assessment and related media
-    const assessment = await db
-      .query("assessments")
-      .withIndex("by_id_tenant", (q) => q.eq("_id", assessmentId).eq("tenantId", orgId))
-      .first()
+    const assessment = await convex.query("assessments:get", { id: assessmentId })
 
     if (!assessment) {
       throw new Error("Assessment not found")
     }
 
-    const mediaItems = await db
-      .query("media")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", assessmentId).eq("tenantId", orgId))
-      .collect()
+    const mediaItems = await convex.query("media:listByAssessment", { assessmentId })
 
     // Mock vision API call for now
     // In a real implementation, this would call OpenAI's vision API

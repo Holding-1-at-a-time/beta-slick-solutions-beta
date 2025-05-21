@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server"
 import { db } from "@/lib/convex"
+import { revalidatePath } from "next/cache"
 
 export async function dynamicPricingAgent(
   contextId: string,
@@ -84,5 +85,104 @@ export async function dynamicPricingAgent(
   } catch (error) {
     console.error("Error in dynamicPricingAgent:", error)
     throw new Error("Failed to generate pricing")
+  }
+}
+
+export async function getPricingParams() {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: Must be signed in with an organization")
+  }
+
+  try {
+    const params = await db.query("getPricingParams", {
+      orgId,
+    })
+
+    return params
+  } catch (error) {
+    console.error("Error getting pricing parameters:", error)
+    throw new Error("Failed to get pricing parameters")
+  }
+}
+
+export async function updatePricingParams(settings: any) {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: Must be signed in with an organization")
+  }
+
+  try {
+    const result = await db.mutation("updatePricingParams", {
+      orgId,
+      settings,
+    })
+
+    // Revalidate the pricing page
+    revalidatePath(`/${orgId}/dashboard/client/pricing`)
+
+    return result
+  } catch (error) {
+    console.error("Error updating pricing parameters:", error)
+    throw new Error("Failed to update pricing parameters")
+  }
+}
+
+export async function listPricingLogs(page = 1, filters = {}) {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: Must be signed in with an organization")
+  }
+
+  try {
+    const result = await db.query("listPricingLogs", {
+      orgId,
+      page,
+      limit: 10,
+      ...filters,
+    })
+
+    return result
+  } catch (error) {
+    console.error("Error listing pricing logs:", error)
+    throw new Error("Failed to list pricing logs")
+  }
+}
+
+export async function getPricingLogById(logId: string) {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: Must be signed in with an organization")
+  }
+
+  try {
+    const log = await db.query("getPricingLogById", {
+      orgId,
+      logId,
+    })
+
+    return log
+  } catch (error) {
+    console.error("Error getting pricing log:", error)
+    throw new Error("Failed to get pricing log")
+  }
+}
+
+export async function getPricingLogSteps(logId: string) {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: Must be signed in with an organization")
+  }
+
+  try {
+    const steps = await db.query("getPricingLogSteps", {
+      orgId,
+      logId,
+    })
+
+    return steps
+  } catch (error) {
+    console.error("Error getting pricing log steps:", error)
+    throw new Error("Failed to get pricing log steps")
   }
 }

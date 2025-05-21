@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import AIInsightsAgent from "./ai-insights-agent"
 import { formatCurrency } from "@/lib/utils/format-currency"
+import { AppointmentChart, RevenueChart } from "@/components/charts"
 
 export default function MemberAnalytics() {
   const { analytics: dayAnalytics, isLoading: dayLoading } = useMemberAnalytics("day")
@@ -27,28 +28,52 @@ export default function MemberAnalytics() {
       return <p className="text-gray-500">Error loading analytics data.</p>
     }
 
+    // Format data for appointment chart
+    const appointmentData =
+      analytics.appointmentsByDay?.map((item: any) => ({
+        name: item.day,
+        scheduled: item.scheduled,
+        completed: item.completed,
+        cancelled: item.cancelled || 0,
+      })) || []
+
+    // Format data for revenue chart
+    const revenueData =
+      analytics.revenueByDay?.map((item: any) => ({
+        name: item.day,
+        revenue: item.amount,
+      })) || []
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-gray-500">Total Appointments</p>
-          <p className="text-3xl font-bold">{analytics.totalAppointments}</p>
-        </Card>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="p-4">
+            <p className="text-sm text-gray-500">Total Appointments</p>
+            <p className="text-3xl font-bold">{analytics.totalAppointments}</p>
+          </Card>
 
-        <Card className="p-4">
-          <p className="text-sm text-gray-500">Completed</p>
-          <p className="text-3xl font-bold">{analytics.completedAppointments}</p>
-          <p className="text-sm text-gray-500">{analytics.completionRate.toFixed(1)}% completion rate</p>
-        </Card>
+          <Card className="p-4">
+            <p className="text-sm text-gray-500">Completed</p>
+            <p className="text-3xl font-bold">{analytics.completedAppointments}</p>
+            <p className="text-sm text-gray-500">{analytics.completionRate.toFixed(1)}% completion rate</p>
+          </Card>
 
-        <Card className="p-4">
-          <p className="text-sm text-gray-500">Total Revenue</p>
-          <p className="text-3xl font-bold">{formatCurrency(analytics.totalRevenue)}</p>
-        </Card>
+          <Card className="p-4">
+            <p className="text-sm text-gray-500">Total Revenue</p>
+            <p className="text-3xl font-bold">{formatCurrency(analytics.totalRevenue)}</p>
+          </Card>
 
-        <Card className="p-4">
-          <p className="text-sm text-gray-500">Average Invoice</p>
-          <p className="text-3xl font-bold">{formatCurrency(analytics.averageInvoice)}</p>
-        </Card>
+          <Card className="p-4">
+            <p className="text-sm text-gray-500">Average Invoice</p>
+            <p className="text-3xl font-bold">{formatCurrency(analytics.averageInvoice)}</p>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AppointmentChart data={appointmentData} title={`Appointments (${period})`} chartType="bar" height={250} />
+
+          <RevenueChart data={revenueData} title={`Revenue (${period})`} height={250} showTotal={false} />
+        </div>
       </div>
     )
   }

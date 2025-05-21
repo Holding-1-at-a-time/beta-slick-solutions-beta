@@ -7,9 +7,10 @@ import { MobileNav } from "@/components/ui/mobile-nav"
 interface DashboardLayoutProps {
   children: ReactNode
   sidebar: ReactNode
+  orgId: string
 }
 
-export function DashboardLayout({ children, sidebar, orgId }: DashboardLayoutProps & { orgId: string }) {
+export function DashboardLayout({ children, sidebar, orgId }: DashboardLayoutProps) {
   const { isMobile } = useMobile()
 
   return (
@@ -29,3 +30,5 @@ export function DashboardLayout({ children, sidebar, orgId }: DashboardLayoutPro
     </div>
   )
 }
+
+export default DashboardLayout

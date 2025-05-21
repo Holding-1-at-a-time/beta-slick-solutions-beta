@@ -19,3 +19,7 @@ export const api = {
     listTestRecords: "queries:listTestRecords",
   },
 }
+
+// Add the missing exports
+export const mutation = (name: string) => ({ name })
+export const query = (name: string) => ({ name })

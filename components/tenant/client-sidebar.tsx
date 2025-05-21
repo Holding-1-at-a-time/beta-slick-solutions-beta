@@ -115,3 +115,5 @@ export function ClientSidebar({ orgId, userId }: ClientSidebarProps) {
     </div>
   )
 }
+
+export default ClientSidebar

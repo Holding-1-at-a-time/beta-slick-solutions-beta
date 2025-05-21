@@ -1,52 +1,108 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import type React from "react"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { supervisorAgent } from "@/app/actions/supervisor"
-import { TaskStatusCard } from "@/components/ui/task-status-card"
-import { SupervisorSummary } from "@/components/supervisor/supervisor-summary"
-import { LoadingPlaceholder } from "@/components/ui/loading-placeholder"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2, CheckCircle, Clock } from "lucide-react"
 
-export function SupervisorAgent({ orgId, task }: { orgId: string; task: string }) {
-  const [loading, setLoading] = useState(true)
-  const [tasks, setTasks] = useState<any[]>([])
-  const [summary, setSummary] = useState<string | null>(null)
+interface SupervisorAgentProps {
+  orgId: string
+}
 
-  useEffect(() => {
-    const runSupervisor = async () => {
-      try {
-        setLoading(true)
-        setTasks([])
-        setSummary(null)
+export function SupervisorAgent({ orgId }: SupervisorAgentProps) {
+  const [task, setTask] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [results, setResults] = useState<any>(null)
+  const { toast } = useToast()
 
-        // Call the supervisor agent
-        const result = await supervisorAgent(orgId, task)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!task.trim()) return
 
-        // Update tasks and summary
-        setTasks(result.tasks || [])
-        setSummary(result.summary || null)
-        setLoading(false)
-      } catch (error) {
-        console.error("Error in SupervisorAgent:", error)
-        setLoading(false)
-      }
+    setIsProcessing(true)
+    try {
+      const response = await supervisorAgent(orgId, task)
+      setResults(response)
+      toast({
+        title: "Task processed",
+        description: "The supervisor agent has completed the task.",
+      })
+    } catch (error) {
+      console.error("Error processing task:", error)
+      toast({
+        title: "Processing failed",
+        description: "Failed to process the task. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
     }
-
-    runSupervisor()
-  }, [orgId, task])
-
-  if (loading) {
-    return <LoadingPlaceholder message="Orchestrating Tasks..." />
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        {tasks.map((task, index) => (
-          <TaskStatusCard key={index} label={task.label} status={task.status} details={task.details} />
-        ))}
-      </div>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>AI Supervisor</CardTitle>
+        <CardDescription>Coordinate multiple AI agents to solve complex tasks</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex space-x-2">
+            <Input
+              placeholder="Enter a task for the AI to handle..."
+              value={task}
+              onChange={(e) => setTask(e.target.value)}
+              disabled={isProcessing}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              disabled={isProcessing || !task.trim()}
+              className="bg-[#00AE98] hover:bg-[#00AE98]/90"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Process"
+              )}
+            </Button>
+          </div>
+        </form>
 
-      {summary && <SupervisorSummary text={summary} />}
-    </div>
+        {results && (
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-medium">Task Progress</h3>
+            <div className="space-y-2">
+              {results.tasks.map((t: any, i: number) => (
+                <div key={i} className="flex items-center space-x-2 p-2 border rounded-md">
+                  {t.status === "done" ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <Clock className="h-5 w-5 text-amber-500" />
+                  )}
+                  <div>
+                    <p className="font-medium">{t.label}</p>
+                    <p className="text-sm text-gray-500">{t.details}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 p-4 bg-gray-50 rounded-md">
+              <h3 className="text-lg font-medium mb-2">Summary</h3>
+              <p className="text-gray-700">{results.summary}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
