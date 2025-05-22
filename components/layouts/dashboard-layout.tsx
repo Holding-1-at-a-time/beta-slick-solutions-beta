@@ -1,31 +1,26 @@
 "use client"
 
-import type { ReactNode } from "react"
+import type React from "react"
+import { ClientSidebar } from "@/components/tenant/client-sidebar"
 import { useMobile } from "@/hooks/use-mobile"
-import { MobileNav } from "@/components/ui/mobile-nav"
 
 interface DashboardLayoutProps {
-  children: ReactNode
-  sidebar: ReactNode
+  children: React.ReactNode
+  sidebar?: React.ReactNode
 }
 
-export function DashboardLayout({ children, sidebar, orgId }: DashboardLayoutProps & { orgId: string }) {
-  const { isMobile } = useMobile()
+export function DashboardLayout({ children, sidebar }: DashboardLayoutProps) {
+  const isMobile = useMobile()
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <div className={isMobile ? "hidden" : "w-64 shrink-0"}>{sidebar}</div>
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <div className={`${isMobile ? "hidden" : "w-64"} bg-gray-900 text-white`}>{sidebar || <ClientSidebar />}</div>
 
-        {/* Main content */}
-        <div className="flex-1 overflow-auto">
-          <main className="container mx-auto p-4 md:p-6 pb-20">{children}</main>
-        </div>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        <main className="flex-1 p-6 overflow-auto">{children}</main>
       </div>
-
-      {/* Mobile navigation */}
-      <MobileNav orgId={orgId} />
     </div>
   )
 }
